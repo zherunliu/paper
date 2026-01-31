@@ -1,0 +1,230 @@
+\chapter{相关背景知识介绍}\label{Chap:chap2}
+《正文》********************
+
+\section{章内标题2.1}\label{Sec2.1}
+（一个公式示例）$\Gamma$函数可以通过Eular第二类积分定义:
+\begin{equation}\label{Eq:Chap2_Sec2.1_eq1}
+	\Gamma (z) = \int_0^\infty  {{t^{z - 1}}{e^{ - t}}{\rm{d}}t}, ~ \rm{Re}(z)>0
+\end{equation}
+
+
+
+一个长公式排版的例子如下：
+\begin{multline}\label{Eq:Chap2_Sec2.1_eq3}
+  \frac{1}{2}\Delta(f_{ij}f^{ij}) = 2\left(\sum_{i<j}\chi_{ij}(\sigma _{i}- \sigma _{j}) ^{2}+ f^{ij}\nabla _{j}\nabla _{i}(\Delta f)+ \right.\\ 
+  \left. +\nabla _{k}f_{ij}\nabla ^{k}f^{ij}+ f^{ij}f^{k}\left[2\nabla _{i}R_{jk}- \nabla _{k}R_{ij}\right]\vphantom {\sum_{i<j}}\right)
+\end{multline}
+
+定理环境：
+%定义了丰富的定理环境algo(算法)，them(定理)，lem(引理)，prop(命
+%题)，cor(推论)，defn(定义)，conj(猜想)，exmp(例)，rem(注)，case(情形)，amsmath 还
+%提供了一个proof(证明) 的环境。这里举一个“定理” 和“证明” 的例子。
+\begin{thm}[留数定理]
+	假设$U$ 是复平面上的一个单连通开子集......
+	
+	\begin{proof}
+		首先， 由...
+		其次， ...
+		所以...
+	\end{proof}
+\end{thm}
+
+
+
+
+图\ref{Fig:Chap2_Fig1}是一个示例
+\begin{figure}[!htp]
+	\centering
+	\includegraphics[width=0.45\textwidth]{figures/C2Fig/C2Fig1.jpg}
+	\caption{南京邮电大学校徽图}
+	\label{Fig:Chap2_Fig1}
+\end{figure}
+
+
+
+表\ref{Tab:Chap2_Tab1}是一个示例
+\begin{table}[!htp]
+	\small
+	\caption{\label{Tab:Chap2_Tab1}\text{南京邮电大学一级学科博士点}}
+	\centering
+	\renewcommand\arraystretch{1.3}
+	\begin{tabular}{|c|c|c|}
+		\hline
+		%\toprule
+		\textbf{一级学科（类别）代码}   & \textbf{一级学科（类别）名称}  & \textbf{一级学科（类别）挂靠学院}  \\
+		\hline
+		%\midrule
+		0701               & 数学            & 理学院          \\
+        0702               & 物理学            & 理学院          \\
+        0803               & 光学工程            & 材料科学与工程学院          \\
+        0809               & 电子科学与技术            & 电子与光学工程学院、柔性电子（未来技术）学院          \\
+        0810               & 信息与通信工程            & 通信与信息工程学院         \\
+        0811              & 控制科学与工程            & 自动化学院、人工智能学院          \\
+        0839              & 网络空间安全            & 计算机学院、软件学院、网络空间安全学院          \\
+        1401              & 集成电路科学与工程            & 集成电路科学与工程学院          \\
+		\hline
+		%\bottomrule
+	\end{tabular}
+\end{table}
+
+
+图\ref{Fig:Chap2_Fig2}是一个示例
+\begin{figure}[!htp]
+	\centering
+	\subfigure[**************]{
+		\label{Fig:C2_Fig2:a} %% label for first subfigure
+		\includegraphics[width=0.45\textwidth]{figures/C2Fig/C2Fig2.pdf}}
+	\subfigure[**************]{
+		\label{Fig:C2_Fig2:b} %% label for second subfigure
+		\includegraphics[width=0.45\textwidth]{figures/C2Fig/C2Fig3.pdf}}
+	\caption{南京邮电大学校园美景图}
+	\label{Fig:Chap2_Fig2}
+\end{figure}
+
+
+表\ref{Tab:Chap2_Tab2}是一个示例
+\begin{table}[!htp]
+	\small
+	\caption{\label{Tab:Chap2_Tab2}\text{南京邮电大学实验教学示范中心}}
+	\centering
+	\renewcommand\arraystretch{1.3}
+	\begin{tabular}{|c|c|c|}
+		\hline
+		%\toprule
+		\textbf{级别} & \multicolumn{2}{c|}{\textbf{机构名称}} \\
+		\hline
+		\multirowcell{3}{\textbf{国家级}} & 信息与通信工程实验教学中心 & 网络与控制虚拟仿真实验教学中心 \\
+		\cline{2-3} & 电子科学与技术实验教学中心  & 通信与信息网络虚拟仿真实验教学中心 \\
+		\cline{2-3} & 信息电子技术虚拟仿真实验教学中心 & -- \\
+		\hline
+		%\midrule
+		\multirowcell{7}{\textbf{省级}} & 通信与信息处理实验教学中心 & 电工电子实验教学中心 \\
+		\cline{2-3} & 计算机基础实验教学中心  & 光电信息实验教学中心 \\
+		\cline{2-3} & 经济管理基础课实验教学中心 & 数学实验教学中心 \\
+		\cline{2-3} & 物理实验教学中心 & 软件与服务外包校企合作工程实践教育中心 \\
+		\cline{2-3} & 自动化实验教学中心 & 智能电网信息工程综合训练中心 \\
+		\cline{2-3} & 融合通信技术实践教育中心 & 基于云计算的移动商务实用型人才实践教育中心 \\
+		\cline{2-3} & 射频与微纳电子综合训练中心 & 物联网应用技术实践教育中心 \\
+		\hline
+		%\bottomrule
+	\end{tabular}
+\end{table}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{\bf{算法 \ref{Alg:C2_algo1}}}是一个示例
+\begin{algorithm}[!htp]
+    \floatname{algorithm}{算法}
+    \renewcommand{\thealgorithm}{2.1}
+	\caption{******************}
+	\begin{algorithmic}[1]
+		\renewcommand{\algorithmicrequire}{\textbf{输入}:}
+		\renewcommand{\algorithmicensure}{\textbf{输出}:}	
+		\Require **************
+        \State **************************；
+        \Repeat
+            \State *********************；
+            \While {*********************}
+            \If {*********************}
+            \State *********************；                    
+            \Else
+            \State *********************；
+            \EndIf
+            \EndWhile
+        \Until **************************
+		\Ensure **************************
+	\end{algorithmic}
+	\label{Alg:C2_algo1}
+\end{algorithm}
+
+
+
+
+用listings 插入C代码的一个示例
+
+\begin{lstlisting}[language={C}, caption={一段C源代码}]
+	#include <stdio.h>
+	include <unistd.h>
+	...
+\end{lstlisting}
+
+用listings 插入Matlab代码的一个示例
+\begin{lstlisting}[language={matlab}, caption={一段MATLAB源代码}]
+	function paper1
+	r=0.05;
+	n=100;
+	...
+\end{lstlisting}
+
+
+
+
+
+
+
+
+\subsection{章内标题2.1.1}\label{Sec2.1.1}
+《正文》********************
+
+
+
+\subsection{章内标题2.1.2}\label{Sec2.1.2}
+《正文》********************
+
+
+\section{章内标题2.2}\label{Sec2.2}
+《正文》********************
+
+
+\subsection{章内标题2.2.1}\label{Sec2.2.1}
+《正文》********************
+
+
+
+\subsection{章内标题2.2.2}\label{Sec2.2.2}
+《正文》********************
+
+
+
+\section{章内标题2.3}\label{Sec2.3}
+《正文》********************
+
+
+\subsection{章内标题2.3.1}\label{Sec2.3.1}
+《正文》********************
+
+
+
+\subsection{章内标题2.3.2}\label{Sec2.3.2}
+《正文》********************
+
+
+
+
+
+
+
+
+
+
+\section{本章小结}\label{Sec2.4}
+《正文》********************
