@@ -14,7 +14,7 @@ main.tex + mybib.bib
    ↓
 第一轮 LaTeX -> 读取 main.tex -> 更新 main.aux（写入cite/样式/库信息）
    ↓
-第二轮 BibTeX -> 读取main.aux+mybib.bib -> 生成 main.bbl+main.blg
+第二轮 BibTeX -> 读取 main.aux + mybib.bib -> 生成 main.bbl + main.blg
    ↓
 第三轮 LaTeX -> 读取 main.tex+main.bbl -> 生成参考文献列表 + 更新 main.aux（写入cite-编号映射）
    ↓

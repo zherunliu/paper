@@ -1,230 +1,131 @@
-\chapter{相关背景知识介绍}\label{Chap:chap2}
-《正文》********************
+\chapter{理论基础与相关工作}\label{Chap:chap2}
 
-\section{章内标题2.1}\label{Sec2.1}
-（一个公式示例）$\Gamma$函数可以通过Eular第二类积分定义:
-\begin{equation}\label{Eq:Chap2_Sec2.1_eq1}
-	\Gamma (z) = \int_0^\infty  {{t^{z - 1}}{e^{ - t}}{\rm{d}}t}, ~ \rm{Re}(z)>0
+本章首先介绍强化学习的理论基础，建立本文所需的数学框架；随后对离线强化学习、离线到在线强化学习领域的相关工作进行系统综述，分析现有方法的发展脉络、核心优势与局限，阐明本文研究动机。
+
+
+\section{理论基础}\label{Sec2.1}
+
+
+\subsection{马尔可夫决策过程}\label{Sec2.1.1}
+
+强化学习问题通常建模为马尔可夫决策过程（Markov Decision Process, MDP）\cite{Sutton2018RLBook}。MDP由六元组$M = (\mathcal{S}, \mathcal{A}, T, r, \mu_0, \gamma)$定义，其中$\mathcal{S}$表示状态空间，$\mathcal{A}$表示动作空间，$r(s,a)$为奖励函数，$T(s'|s,a)$为状态转移函数，$\mu_0$为初始状态分布，$\gamma \in (0,1)$为折扣因子。
+
+状态价值函数$V_M^\pi(s)$表示在MDP $M$中，从状态$s$出发遵循策略$\pi$所能获得的期望折扣回报：
+\begin{equation}\label{Eq:Chap2_value_function}
+	V_M^\pi(s) = \mathbb{E}_{\pi, M}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t)\right]
 \end{equation}
 
+期望折扣回报$\eta_M^\pi$可通过初始状态分布$\mu_0$下状态价值函数的期望得到：
+\begin{equation}\label{Eq:Chap2_expected_return}
+	\eta_M^\pi = \mathbb{E}_{s \sim \mu_0}[V_M^\pi(s)]
+\end{equation}
 
+MDP的目标是找到最大化$\eta_M^\pi$的最优策略。
 
-一个长公式排版的例子如下：
-\begin{multline}\label{Eq:Chap2_Sec2.1_eq3}
-  \frac{1}{2}\Delta(f_{ij}f^{ij}) = 2\left(\sum_{i<j}\chi_{ij}(\sigma _{i}- \sigma _{j}) ^{2}+ f^{ij}\nabla _{j}\nabla _{i}(\Delta f)+ \right.\\ 
-  \left. +\nabla _{k}f_{ij}\nabla ^{k}f^{ij}+ f^{ij}f^{k}\left[2\nabla _{i}R_{jk}- \nabla _{k}R_{ij}\right]\vphantom {\sum_{i<j}}\right)
-\end{multline}
-
-定理环境：
-%定义了丰富的定理环境algo(算法)，them(定理)，lem(引理)，prop(命
-%题)，cor(推论)，defn(定义)，conj(猜想)，exmp(例)，rem(注)，case(情形)，amsmath 还
-%提供了一个proof(证明) 的环境。这里举一个“定理” 和“证明” 的例子。
-\begin{thm}[留数定理]
-	假设$U$ 是复平面上的一个单连通开子集......
-	
-	\begin{proof}
-		首先， 由...
-		其次， ...
-		所以...
-	\end{proof}
-\end{thm}
+动作价值函数$Q_M^\pi(s,a)$表示在状态$s$执行动作$a$后，遵循策略$\pi$所能获得的期望折扣回报。设$\rho_M^\pi(s,a)$为策略$\pi$下的（非归一化）折扣状态-动作访问分布：
+\begin{equation}\label{Eq:Chap2_visit_distribution}
+	\rho_M^\pi(s,a) = \pi(a|s) \sum_{t=0}^{\infty} \gamma^t P(s_t = s | \pi, M)
+\end{equation}
 
+其中$P(s_t=s | \pi, M)$表示在MDP $M$中遵循策略$\pi$于时刻$t$到达状态$s$的概率。期望折扣回报可表示为：
+\begin{equation}\label{Eq:Chap2_expected_return_rho}
+	\eta_M^\pi = \mathbb{E}_{\rho_M^\pi} \left[ r(s, a) \right]
+\end{equation}
 
+归一化状态-动作访问分布定义为$\tilde{\rho}_M^\pi(s,a) = (1 - \gamma) \cdot \rho_M^\pi(s,a)$。
 
 
-图\ref{Fig:Chap2_Fig1}是一个示例
-\begin{figure}[!htp]
-	\centering
-	\includegraphics[width=0.45\textwidth]{figures/C2Fig/C2Fig1.jpg}
-	\caption{南京邮电大学校徽图}
-	\label{Fig:Chap2_Fig1}
-\end{figure}
+\subsection{基于模型的离线强化学习框架}\label{Sec2.1.2}
 
+在离线强化学习中，智能体仅能访问由行为策略$\pi_D$采集的静态数据集$\mathcal{D}_{off} = \{(s_i, a_i, s_i', r_i)\}_{i=1}^N$，而无法与环境交互。为优化策略，基于模型的离线强化学习首先通过监督学习构建转移模型$\hat{T}_{\theta}(s', r|s, a)$，该模型根据当前状态$s$和动作$a$预测下一状态$s'$和奖励$r$。
 
+转移模型通常表示为高斯分布$\hat{T}_{\theta}(s', r|s, a) = \mathcal{N}(\mu_{\theta}(s, a), \Sigma_{\theta}(s, a))$，其中$\mu_{\theta}(s, a)$为分布均值，$\Sigma_{\theta}(s, a)$为方差。策略可通过与该监督学习得到的转移模型交互进行优化。基于模型的方法在数据采集困难时具有更高的样本效率，但真实环境与监督学习得到的转移模型之间的差异会累积外推误差，导致分布偏移问题。因此，减少分布外数据的过估计对于基于模型的离线强化学习至关重要。
 
-表\ref{Tab:Chap2_Tab1}是一个示例
-\begin{table}[!htp]
-	\small
-	\caption{\label{Tab:Chap2_Tab1}\text{南京邮电大学一级学科博士点}}
-	\centering
-	\renewcommand\arraystretch{1.3}
-	\begin{tabular}{|c|c|c|}
-		\hline
-		%\toprule
-		\textbf{一级学科（类别）代码}   & \textbf{一级学科（类别）名称}  & \textbf{一级学科（类别）挂靠学院}  \\
-		\hline
-		%\midrule
-		0701               & 数学            & 理学院          \\
-        0702               & 物理学            & 理学院          \\
-        0803               & 光学工程            & 材料科学与工程学院          \\
-        0809               & 电子科学与技术            & 电子与光学工程学院、柔性电子（未来技术）学院          \\
-        0810               & 信息与通信工程            & 通信与信息工程学院         \\
-        0811              & 控制科学与工程            & 自动化学院、人工智能学院          \\
-        0839              & 网络空间安全            & 计算机学院、软件学院、网络空间安全学院          \\
-        1401              & 集成电路科学与工程            & 集成电路科学与工程学院          \\
-		\hline
-		%\bottomrule
-	\end{tabular}
-\end{table}
 
+\subsection{集成模型与不确定性估计}\label{Sec2.1.3}
 
-图\ref{Fig:Chap2_Fig2}是一个示例
-\begin{figure}[!htp]
-	\centering
-	\subfigure[**************]{
-		\label{Fig:C2_Fig2:a} %% label for first subfigure
-		\includegraphics[width=0.45\textwidth]{figures/C2Fig/C2Fig2.pdf}}
-	\subfigure[**************]{
-		\label{Fig:C2_Fig2:b} %% label for second subfigure
-		\includegraphics[width=0.45\textwidth]{figures/C2Fig/C2Fig3.pdf}}
-	\caption{南京邮电大学校园美景图}
-	\label{Fig:Chap2_Fig2}
-\end{figure}
+集成方法通过训练多个独立模型，利用模型间预测的分歧度估计不确定性\cite{Lakshminarayanan2017Ensemble}。设训练$N$个模型$\{f_1, \ldots, f_N\}$，预测不确定性可通过集成预测的方差估计。
 
+强化学习中的不确定性可分为两类：\textbf{认知不确定性（Epistemic Uncertainty）}源于知识的缺乏，可通过收集更多数据降低；\textbf{偶然不确定性（Aleatoric Uncertainty）}源于环境固有的随机性，无法通过更多数据消除。对于离线到在线强化学习，认知不确定性尤为重要：高认知不确定性区域对应离线数据覆盖不足的区域，是在线探索应优先关注的目标。
 
-表\ref{Tab:Chap2_Tab2}是一个示例
-\begin{table}[!htp]
-	\small
-	\caption{\label{Tab:Chap2_Tab2}\text{南京邮电大学实验教学示范中心}}
-	\centering
-	\renewcommand\arraystretch{1.3}
-	\begin{tabular}{|c|c|c|}
-		\hline
-		%\toprule
-		\textbf{级别} & \multicolumn{2}{c|}{\textbf{机构名称}} \\
-		\hline
-		\multirowcell{3}{\textbf{国家级}} & 信息与通信工程实验教学中心 & 网络与控制虚拟仿真实验教学中心 \\
-		\cline{2-3} & 电子科学与技术实验教学中心  & 通信与信息网络虚拟仿真实验教学中心 \\
-		\cline{2-3} & 信息电子技术虚拟仿真实验教学中心 & -- \\
-		\hline
-		%\midrule
-		\multirowcell{7}{\textbf{省级}} & 通信与信息处理实验教学中心 & 电工电子实验教学中心 \\
-		\cline{2-3} & 计算机基础实验教学中心  & 光电信息实验教学中心 \\
-		\cline{2-3} & 经济管理基础课实验教学中心 & 数学实验教学中心 \\
-		\cline{2-3} & 物理实验教学中心 & 软件与服务外包校企合作工程实践教育中心 \\
-		\cline{2-3} & 自动化实验教学中心 & 智能电网信息工程综合训练中心 \\
-		\cline{2-3} & 融合通信技术实践教育中心 & 基于云计算的移动商务实用型人才实践教育中心 \\
-		\cline{2-3} & 射频与微纳电子综合训练中心 & 物联网应用技术实践教育中心 \\
-		\hline
-		%\bottomrule
-	\end{tabular}
-\end{table}
+在基于模型的强化学习中，集成动力学模型的每个成员输出高斯分布，其预测方差$\Sigma_\phi^i(s,a)$反映偶然不确定性。为进一步捕捉认知不确定性，可利用集成模型均值预测的分歧度：
+\begin{equation}\label{Eq:Chap2_disvar}
+	\text{DisVar}(s,a) = \frac{1}{d}\sum_{j=1}^d \text{Var}_{i=1,\ldots,N}[\mu_{\phi,j}^i(s,a)]
+\end{equation}
 
+其中$d$为预测向量维度，$\text{Var}_i$表示集成模型间的方差。本文将在算法设计中结合两类不确定性，实现更有效的在线探索。
 
 
+\section{离线强化学习相关工作}\label{Sec2.2}
 
+离线强化学习（Offline Reinforcement Learning）旨在仅利用预先收集的静态数据集学习策略，而不与环境进行交互\cite{Levine2020OfflineRL}。该范式在机器人控制\cite{Johannink2019Residual}、自动驾驶\cite{Kiran2022Driving}、医疗决策\cite{Gottesman2019Healthcare}等探索成本高昂或存在安全风险的领域具有重要应用价值。离线强化学习面临的核心挑战是\textbf{分布偏移（Distribution Shift）}问题\cite{Fujimoto2019BCQ}：当学习策略与行为策略差异较大时，策略可能访问离线数据集未覆盖的状态-动作对，导致价值函数的外推误差（Extrapolation Error）\cite{Liu2020Provably}。根据是否学习环境模型，离线强化学习方法可分为无模型方法和基于模型方法两大类。
 
 
+\subsection{无模型离线强化学习}\label{Sec2.2.1}
 
+无模型离线强化学习直接利用离线数据优化策略，其核心思想是在价值函数或策略中引入保守性约束，避免对分布外动作的过估计\cite{Wu2019BRAC,Xu2022PGIS,Kumar2019BEAR,Lyu2022MCQ,Kostrikov2022IQL}。
 
+\textbf{策略约束方法}是该领域的早期探索方向。BCQ\cite{Fujimoto2019BCQ}首次系统分析了离线强化学习中的外推误差问题，提出通过生成模型约束策略仅在行为策略支撑集内选择动作。BRAC\cite{Wu2019BRAC}进一步系统研究了策略正则化方法，通过KL散度或MMD度量约束学习策略与行为策略的距离。TD3+BC\cite{Fujimoto2021TD3BC}则采用更简洁的行为克隆正则项，以极简方式实现策略约束。策略约束方法的\textbf{优势}在于直观有效地避免分布外动作，\textbf{局限}在于策略改进空间受行为策略质量限制，难以超越数据集中最优轨迹的性能。
 
+\textbf{价值正则化方法}从价值函数角度抑制过估计。CQL\cite{Kumar2020CQL}引入正则项学习保守的Q值下界，通过推低分布外动作的Q值、推高数据集内动作的Q值实现保守估计。MCQ\cite{Lyu2022MCQ}在CQL基础上引入更温和的保守约束，避免过度惩罚。IQL\cite{Kostrikov2022IQL}采用期望回归学习价值函数，通过非对称损失函数隐式逼近最优Q值，完全避免对分布外动作的显式查询。价值正则化方法的\textbf{优势}在于无需显式建模行为策略，理论保证更为完善；\textbf{局限}在于保守性可能过强，导致策略性能低于数据集中最优轨迹。
 
+无模型方法的共同\textbf{局限}在于无法生成新的数据样本，样本效率较低，且保守性约束可能限制策略的潜在性能。
 
 
+\subsection{基于模型的离线强化学习}\label{Sec2.2.2}
 
+基于模型的离线强化学习首先从离线数据学习环境转移模型，再通过与模型交互优化策略\cite{Janner2019MBPO,Yu2020MOPO,Wang2021MORI,Lu2024SER}。该类方法的\textbf{优势}在于可利用模型生成额外数据，提升样本效率。然而，模型在分布外区域的预测可能产生外推误差\cite{Liu2020Provably}，且误差会随rollout步数累积，导致性能退化。因此，基于模型的方法需在探索分布外数据与保持保守性之间取得平衡。
 
+\textbf{不确定性惩罚方法}是该领域的主流范式。MOPO\cite{Yu2020MOPO}提出通过集成模型估计不确定性，对模型预测的奖励施加不确定性惩罚，约束策略在低不确定性区域内优化。该方法的\textbf{优势}在于提供了理论保证的性能下界；\textbf{局限}在于惩罚系数需要针对不同任务调整，且过强的惩罚可能限制策略性能。
 
+\textbf{悲观MDP方法}从另一角度实现保守性。MOReL\cite{Kidambi2020MOReL}构建悲观MDP：当模型不确定性超过阈值时，将状态转移至吸收状态并给予低奖励，从而约束策略在高置信区域内优化。RAMBO\cite{Rigter2022RAMBO}通过对抗训练学习悲观模型，无需显式设定不确定性阈值。该类方法的\textbf{优势}在于提供更强的安全保证；\textbf{局限}在于悲观性可能过强，导致策略过于保守。
 
+\textbf{保守价值估计方法}将无模型方法的保守性与模型数据结合。COMBO\cite{Yu2021COMBO}在模型生成数据上采用CQL的保守估计，在真实数据上进行标准学习，兼顾数据效率与保守性。该方法的\textbf{优势}在于结合了两类方法的优点；\textbf{局限}在于仍受CQL保守性的限制。
 
+近年来，研究者开始引入\textbf{扩散模型}提升转移模型的表达能力\cite{Sun2024Conformal,Zhou2024Diffusion}，能够更好地捕捉多模态转移分布。
 
+尽管上述方法在一定程度上缓解了外推误差，但核心局限在于：\textbf{不确定性信息仅用于惩罚高不确定性区域，而非主动引导策略补充这些区域的数据}。这导致模型在分布外区域的泛化能力始终受限，难以充分评估和补充分布外数据。
 
 
+\section{离线到在线强化学习相关工作}\label{Sec2.3}
 
+离线到在线强化学习（Offline-to-Online RL）旨在结合离线学习与在线学习的优势：先在离线数据集上预训练策略，再通过有限的在线交互进行微调，提升策略性能。该范式的核心挑战在于\textbf{灾难性遗忘（Catastrophic Forgetting）}：预训练策略在在线微调初期可能出现性能骤降，原因是策略约束的放松导致对分布外状态的访问增加，而价值函数对这些状态的估计不可靠。
 
-{\bf{算法 \ref{Alg:C2_algo1}}}是一个示例
-\begin{algorithm}[!htp]
-    \floatname{algorithm}{算法}
-    \renewcommand{\thealgorithm}{2.1}
-	\caption{******************}
-	\begin{algorithmic}[1]
-		\renewcommand{\algorithmicrequire}{\textbf{输入}:}
-		\renewcommand{\algorithmicensure}{\textbf{输出}:}	
-		\Require **************
-        \State **************************；
-        \Repeat
-            \State *********************；
-            \While {*********************}
-            \If {*********************}
-            \State *********************；                    
-            \Else
-            \State *********************；
-            \EndIf
-            \EndWhile
-        \Until **************************
-		\Ensure **************************
-	\end{algorithmic}
-	\label{Alg:C2_algo1}
-\end{algorithm}
 
+\subsection{保守性调节方法}\label{Sec2.3.1}
 
+当前主流方法通过在离线阶段采用保守算法、在线阶段逐步放松约束来平滑过渡\cite{Zhao2023E2O}。AWAC\cite{Nair2020AWAC}通过优势加权回归隐式约束策略接近数据集中的高质量动作，自然适配离线到在线转换。PEX\cite{Zhang2023PEX}维护离线策略与在线策略的混合，根据在线性能动态调整混合权重，在安全性与灵活性之间取得平衡。Cal-QL\cite{Nakamoto2024CalQL}发现离线预训练的Q值可能过于保守或乐观，提出通过校准Q值确保在线微调时策略有合理的改进方向。
 
+该类方法的\textbf{优势}在于实现简单、训练稳定；\textbf{局限}在于离线阶段的保守性在在线阶段仍会阻碍策略灵活性，限制策略适应新数据的能力。
 
-用listings 插入C代码的一个示例
 
-\begin{lstlisting}[language={C}, caption={一段C源代码}]
-	#include <stdio.h>
-	include <unistd.h>
-	...
-\end{lstlisting}
+\subsection{数据融合方法}\label{Sec2.3.2}
 
-用listings 插入Matlab代码的一个示例
-\begin{lstlisting}[language={matlab}, caption={一段MATLAB源代码}]
-	function paper1
-	r=0.05;
-	n=100;
-	...
-\end{lstlisting}
+另一类方法关注如何有效融合离线数据与在线数据。平衡重放（Balanced Replay）\cite{Lee2022O2O}结合悲观Q集成与平衡采样策略，以固定比例从离线数据集与在线回放池中采样，避免在线数据稀少时的分布漂移。Q-Ensemble方法\cite{Zhao2023E2O}利用多个Q网络的最小值抑制过估计，在在线阶段逐步放松保守约束。
 
+该类方法的\textbf{优势}在于充分利用离线数据，缓解在线初期的数据稀疏问题；\textbf{局限}在于仍依赖被动采样，未能主动引导策略探索高价值区域。
 
 
+\subsection{现有方法的共同局限}\label{Sec2.3.3}
 
+综合分析现有离线到在线强化学习方法，存在以下共同局限：
+\begin{itemize}
+	\item [(1)] \textbf{保守性与灵活性的矛盾}：离线阶段的保守性约束在在线阶段仍会阻碍策略灵活性，使策略难以有效适应新数据。
+	\item [(2)] \textbf{在线交互成本高}：多数方法为无模型方法，需要频繁访问在线环境（通常需要200k步交互），成本较高。
+	\item [(3)] \textbf{不确定性利用不充分}：现有方法主要将不确定性用于惩罚高不确定性区域以保持保守性，而未能利用不确定性信息主动引导在线探索。
+\end{itemize}
 
-
-
-
-\subsection{章内标题2.1.1}\label{Sec2.1.1}
-《正文》********************
-
-
-
-\subsection{章内标题2.1.2}\label{Sec2.1.2}
-《正文》********************
-
-
-\section{章内标题2.2}\label{Sec2.2}
-《正文》********************
-
-
-\subsection{章内标题2.2.1}\label{Sec2.2.1}
-《正文》********************
-
-
-
-\subsection{章内标题2.2.2}\label{Sec2.2.2}
-《正文》********************
-
-
-
-\section{章内标题2.3}\label{Sec2.3}
-《正文》********************
-
-
-\subsection{章内标题2.3.1}\label{Sec2.3.1}
-《正文》********************
-
-
-
-\subsection{章内标题2.3.2}\label{Sec2.3.2}
-《正文》********************
-
-
-
-
-
-
-
-
+相比之下，近年基于模型的强化学习研究表明，模型的可靠性可以得到相对保证\cite{Yu2020MOPO,Rigter2022RAMBO,Yu2021COMBO,Yang2023PMDB,Sun2024Conformal}。这启发我们探索一种基于模型的离线到在线强化学习算法：\textbf{在离线阶段利用不确定性保持保守性，在在线阶段利用不确定性引导探索}。当采集在线样本时，策略应被引导至高不确定性（转移模型覆盖之外）且高动作价值（接近目标）的区域，而非被动地在低不确定性区域内采样。
 
 
 \section{本章小结}\label{Sec2.4}
-《正文》********************
+
+本章首先介绍了强化学习的理论基础，包括MDP框架、基于模型的离线强化学习框架以及集成模型的不确定性估计方法。在相关工作部分，系统综述了离线强化学习与离线到在线强化学习的发展历程：
+
+\begin{itemize}
+	\item [(1)] \textbf{无模型离线强化学习}通过策略约束或价值正则化抑制分布外过估计，优势在于理论保证完善、实现简洁，局限在于样本效率低、保守性可能限制性能。
+	\item [(2)] \textbf{基于模型离线强化学习}通过学习转移模型提升样本效率，优势在于可生成额外数据，局限在于不确定性信息仅用于惩罚而非引导探索。
+	\item [(3)] \textbf{离线到在线强化学习}通过保守性调节或数据融合平滑过渡，优势在于结合两阶段优势，局限在于保守性与灵活性矛盾、在线交互成本高、不确定性利用不充分。
+\end{itemize}
+
+基于上述分析，本文提出基于定向探索模型的离线到在线强化学习算法（DEM）。DEM继承了基于模型方法的样本效率优势，同时创新性地将不确定性信息用于\textbf{引导在线探索}而非仅用于惩罚：显式引导策略探索高不确定性且高价值的区域，有效补充转移模型，以最少的在线交互实现高效微调。
