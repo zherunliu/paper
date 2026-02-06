@@ -7,7 +7,7 @@ chore: ## Regular maintenance
 
 .PHONY: update
 update: ## Introduce new features
-	git commit -m "update: update new content"
+	git commit -m "update: Update new content"
 	git push origin main
 
 .PHONY: fix
