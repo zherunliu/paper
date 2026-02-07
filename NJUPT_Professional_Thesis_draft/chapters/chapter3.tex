@@ -1,53 +1,327 @@
-\chapter{第三章标题}\label{Chap:chap3}
-《正文》********************
+\chapter{基于对比表征学习的保守离线策略优化算法}\label{Chap:chap3}
 
-\section{章内标题3.1}\label{Sec3.1}
-
+本章详细介绍本文提出的基于对比表征学习的保守离线策略优化算法。首先分析现有离线强化学习方法在分布外检测与保守性调节方面的局限性；随后阐述利用对比学习构建状态-动作表征空间的方法，实现对分布外样本的显式识别；接着设计基于表征距离的自适应保守惩罚机制，使算法在分布内区域保留优化空间的同时对分布外区域施加强约束；最后通过在D4RL基准测试集上的实验验证算法的有效性。
 
 
-\subsection{章内标题3.1.1}\label{Sec3.1.1}
-《正文》********************
+\section{问题分析与算法动机}\label{Sec3.1}
+
+如第二章所述，离线强化学习面临的核心挑战是分布偏移问题：当学习策略与行为策略差异较大时，策略可能访问离线数据集未覆盖的状态-动作对，导致价值函数产生外推误差。现有方法通过引入保守性约束抑制分布外过估计，但存在以下根本性局限：
+
+第一，分布外检测机制不够精确。现有无模型方法（如CQL）通过惩罚策略分布与数据分布的差异隐式识别分布外动作，但这种全局性惩罚无法区分不同状态-动作对的分布外程度。基于模型的方法（如MOPO）利用集成模型的预测分歧度估计不确定性，但需要训练多个独立模型，计算开销较大，且分歧度与真实的分布外程度并非严格对应。
+
+第二，保守性约束缺乏自适应性。CQL采用固定的正则化系数$\alpha$对所有状态施加相同强度的保守约束，这在分布内区域可能过于保守，限制了策略的改进空间；而在分布外区域又可能约束不足，无法有效抑制过估计。理想的保守性机制应根据样本的分布外程度自适应调节惩罚强度。
+
+第三，缺乏对状态-动作空间结构的显式建模。现有方法主要关注价值函数或动力学模型的学习，而忽视了状态-动作空间本身的结构特性。离线数据集定义了一个隐式的支撑集，如何显式刻画这一支撑集的边界，是实现精确分布外检测的关键。
+
+基于上述分析，本文提出利用对比学习构建状态-动作表征空间的核心思想。对比学习通过拉近正样本对、推远负样本对，可学习到紧致且结构化的表征空间。在该空间中，离线数据集中的样本聚集在表征中心附近，而分布外样本则远离中心。基于表征距离可实现对分布外程度的显式量化，进而设计自适应的保守惩罚机制：对分布内样本施加较弱惩罚，保留策略优化空间；对分布外样本施加较强惩罚，有效抑制过估计。
 
 
+\section{对比表征学习框架}\label{Sec3.2}
 
-\subsection{章内标题3.1.2}\label{Sec3.1.2}
-《正文》********************
-
-
-\section{章内标题3.2}\label{Sec3.2}
-《正文》********************
+本节介绍利用对比学习构建状态-动作表征空间的方法。首先阐述状态-动作联合编码器的网络结构，随后介绍轨迹感知的对比学习目标，最后描述表征空间的分布建模方法。
 
 
-\subsection{章内标题3.2.1}\label{Sec3.2.1}
-《正文》********************
+\subsection{状态-动作联合表征网络}\label{Sec3.2.1}
+
+为在统一的表征空间中刻画状态-动作对的分布特性，本文设计状态-动作联合编码器$f_\psi: \mathcal{S} \times \mathcal{A} \rightarrow \mathbb{R}^{d_z}$，将原始状态-动作对映射至低维表征空间。编码器采用模块化设计，包含状态编码器、动作编码器和融合网络三个组件。
+
+状态编码器$f_s: \mathbb{R}^{d_s} \rightarrow \mathbb{R}^{d_h}$将原始状态向量映射至隐藏表征：
+\begin{equation}\label{Eq:Chap3_state_encoder}
+  h_s = f_s(s) = \text{MLP}_s(s; \psi_s)
+\end{equation}
+
+其中$\text{MLP}_s$为多层感知机，包含两个隐藏层，每层256个神经元，使用ReLU激活函数。$d_h$为隐藏表征维度，通常取256。
+
+动作编码器$f_a: \mathbb{R}^{d_a} \rightarrow \mathbb{R}^{d_h}$将动作向量映射至相同维度的隐藏表征：
+\begin{equation}\label{Eq:Chap3_action_encoder}
+  h_a = f_a(a) = \text{MLP}_a(a; \psi_a)
+\end{equation}
+
+融合网络将状态表征和动作表征合并，生成状态-动作联合表征：
+\begin{equation}\label{Eq:Chap3_fusion}
+  h = h_s + h_a
+\end{equation}
+
+本文采用加法融合而非拼接融合，以保持表征维度适中并促进状态与动作信息的交互。
+
+在联合表征之上，添加投影头$g: \mathbb{R}^{d_h} \rightarrow \mathbb{R}^{d_z}$将表征投影至对比学习空间：
+\begin{equation}\label{Eq:Chap3_projection}
+  z = g(h) = \text{MLP}_g(h; \psi_g)
+\end{equation}
+
+投影头采用两层MLP结构，输出维度$d_z$通常取128。最终的状态-动作表征为：
+\begin{equation}\label{Eq:Chap3_representation}
+  z(s, a) = g(f_s(s) + f_a(a))
+\end{equation}
+
+采用投影头的设计遵循对比学习的最佳实践\cite{Chen2020SimCLR}：投影头可过滤与对比任务无关的信息，使编码器学习更通用的表征。在后续的策略优化阶段，使用投影前的表征$h$而非投影后的$z$，以保留更多任务相关信息。
 
 
+\subsection{轨迹感知的对比学习目标}\label{Sec3.2.2}
 
-\subsection{章内标题3.2.2}\label{Sec3.2.2}
-《正文》********************
+对比学习的核心是定义合适的正样本对和负样本对。在离线强化学习场景中，本文提出轨迹感知的对比学习目标，利用轨迹的时序结构定义样本关系。
 
+正样本对定义为同一轨迹内时间相邻的状态-动作对。设轨迹$\tau = \{(s_0, a_0), (s_1, a_1), \ldots, (s_T, a_T)\}$，则$(s_t, a_t)$与$(s_{t+1}, a_{t+1})$构成正样本对。这一定义基于以下直觉：时间相邻的状态-动作对由环境动力学关联，在表征空间中应保持接近。
 
+负样本对定义为来自不同轨迹的状态-动作对。设$(s_i, a_i) \in \tau_1$和$(s_j, a_j) \in \tau_2$，其中$\tau_1 \neq \tau_2$，则二者构成负样本对。不同轨迹的样本可能对应不同的行为模式或环境区域，在表征空间中应保持距离。
 
-\section{章内标题3.3}\label{Sec3.3}
-《正文》********************
+基于上述定义，采用InfoNCE损失\cite{Oord2018CPC}作为对比学习目标：
+\begin{equation}\label{Eq:Chap3_infonce}
+  \mathcal{L}_{CL} = -\mathbb{E}_{\tau \sim \mathcal{D}}\left[\sum_{t=0}^{T-1} \log \frac{\exp(\text{sim}(z_t, z_{t+1})/\tau_{temp})}{\exp(\text{sim}(z_t, z_{t+1})/\tau_{temp}) + \sum_{k \in \mathcal{N}_t} \exp(\text{sim}(z_t, z_k)/\tau_{temp})}\right]
+\end{equation}
 
+其中$z_t = z(s_t, a_t)$为时刻$t$的状态-动作表征，$\text{sim}(u, v) = u^\top v / (\|u\| \|v\|)$为余弦相似度，$\tau_{temp}$为温度参数，$\mathcal{N}_t$为时刻$t$的负样本集合。
 
-\subsection{章内标题3.3.1}\label{Sec3.3.1}
-《正文》********************
+温度参数$\tau_{temp}$控制对比损失的平滑程度：较小的温度使损失对困难负样本更敏感，有助于学习更具区分性的表征；较大的温度则使优化更稳定。本文取$\tau_{temp} = 0.1$，在区分性与稳定性之间取得平衡。
 
+负样本集合$\mathcal{N}_t$的构造采用批内负采样策略：在每个训练批次中，除正样本外的所有样本均作为负样本。设批次大小为$B$，每条轨迹长度为$L$，则每个锚点样本对应约$B \times L - 2$个负样本（排除自身和正样本）。
 
-
-\subsection{章内标题3.3.2}\label{Sec3.3.2}
-《正文》********************
-
-
-
-
-
+轨迹感知对比学习的优势在于：（1）利用时序结构定义正样本，无需数据增强或人工标注；（2）使表征空间不仅反映静态分布，还隐式编码动力学关联；（3）与后续章节的动力学模型学习形成互补视角。
 
 
+\subsection{表征空间的分布建模}\label{Sec3.2.3}
+
+完成对比学习预训练后，需对表征空间中离线数据的分布进行建模，为后续的分布外检测提供基准。本文采用高斯分布对表征空间进行参数化建模。
+
+首先，计算离线数据集在表征空间中的均值向量：
+\begin{equation}\label{Eq:Chap3_mean}
+  \mu_{\mathcal{D}} = \frac{1}{|\mathcal{D}|} \sum_{(s, a) \in \mathcal{D}} z(s, a)
+\end{equation}
+
+其中$|\mathcal{D}|$为离线数据集的样本数量。均值向量$\mu_{\mathcal{D}}$表示离线数据在表征空间中的中心位置。
+
+其次，计算协方差矩阵以刻画分布的形状：
+\begin{equation}\label{Eq:Chap3_covariance}
+  \Sigma_{\mathcal{D}} = \frac{1}{|\mathcal{D}|} \sum_{(s, a) \in \mathcal{D}} (z(s, a) - \mu_{\mathcal{D}})(z(s, a) - \mu_{\mathcal{D}})^\top
+\end{equation}
+
+基于上述统计量，定义状态-动作对$(s, a)$相对于离线数据分布的距离度量。本文考虑两种距离度量：
+
+欧氏距离直接度量表征向量与分布中心的$L_2$距离：
+\begin{equation}\label{Eq:Chap3_euclidean}
+  d_{L2}(s, a) = \|z(s, a) - \mu_{\mathcal{D}}\|_2
+\end{equation}
+
+马氏距离在欧氏距离基础上考虑分布的协方差结构，对各维度进行归一化：
+\begin{equation}\label{Eq:Chap3_mahalanobis}
+  d_{Maha}(s, a) = \sqrt{(z(s, a) - \mu_{\mathcal{D}})^\top \Sigma_{\mathcal{D}}^{-1} (z(s, a) - \mu_{\mathcal{D}})}
+\end{equation}
+
+马氏距离的优势在于：当表征空间各维度的方差差异较大时，马氏距离可避免高方差维度主导距离计算，提供更合理的分布外度量。
+
+为确定分布内与分布外的边界，基于离线数据集的距离分布设定阈值：
+\begin{equation}\label{Eq:Chap3_threshold}
+  d_{threshold} = \text{Percentile}_{p}\{d(s, a) : (s, a) \in \mathcal{D}\}
+\end{equation}
+
+其中$\text{Percentile}_p$表示$p$分位数。本文取$p = 95$，即离线数据集中95\%样本的距离小于阈值。超过阈值的样本被视为分布外样本，需施加较强的保守惩罚。
 
 
+\section{基于表征距离的自适应保守策略优化}\label{Sec3.3}
 
-\section{本章小结}\label{Sec4.4}
-《正文》********************
+本节介绍如何利用表征距离实现自适应的保守策略优化。首先阐述自适应惩罚权重的设计，随后介绍保守Q学习算法的完整框架。
+
+
+\subsection{自适应惩罚权重设计}\label{Sec3.3.1}
+
+传统保守性方法采用固定的惩罚系数，无法适应不同样本的分布外程度。本文提出基于表征距离的自适应惩罚权重，使惩罚强度随分布外程度平滑变化。
+
+定义自适应惩罚权重函数：
+\begin{equation}\label{Eq:Chap3_adaptive_weight}
+  \lambda(s, a) = \lambda_0 \cdot \sigma\left(\beta \cdot (d(s, a) - d_{threshold})\right)
+\end{equation}
+
+其中$\lambda_0$为基础惩罚系数，$\beta$为调节过渡陡峭程度的参数，$\sigma(\cdot)$为Sigmoid函数，$d(s, a)$为表征距离，$d_{threshold}$为分布边界阈值。
+
+该设计具有以下性质：
+
+第一，当$d(s, a) \ll d_{threshold}$时，$(d(s, a) - d_{threshold})$为较大负数，$\sigma(\cdot) \approx 0$，因此$\lambda(s, a) \approx 0$。这意味着对分布内样本几乎不施加惩罚，保留策略的完整优化空间。
+
+第二，当$d(s, a) \gg d_{threshold}$时，$(d(s, a) - d_{threshold})$为较大正数，$\sigma(\cdot) \approx 1$，因此$\lambda(s, a) \approx \lambda_0$。这意味着对分布外样本施加完整惩罚，有效抑制过估计。
+
+第三，当$d(s, a) \approx d_{threshold}$时，$\lambda(s, a) \approx \lambda_0 / 2$，惩罚强度处于中间水平。Sigmoid函数确保惩罚权重在分布边界附近平滑过渡，避免策略优化过程中的梯度不连续。
+
+参数$\beta$控制过渡区域的宽度：较大的$\beta$使过渡更陡峭，惩罚权重在阈值附近快速变化；较小的$\beta$使过渡更平滑，惩罚权重渐变。本文通过实验选取$\beta = 5$，在区分性与平滑性之间取得平衡。
+
+
+\subsection{保守Q学习算法}\label{Sec3.3.2}
+
+基于自适应惩罚权重，本文提出保守Q学习算法。核心思想是在Q值估计中引入基于表征距离的惩罚项，使Q值对分布外动作保持保守。
+
+定义保守Q值估计：
+\begin{equation}\label{Eq:Chap3_conservative_q}
+  \tilde{Q}(s, a) = Q_\theta(s, a) - \lambda(s, a) \cdot d(s, a)
+\end{equation}
+
+其中$Q_\theta(s, a)$为神经网络参数化的原始Q值估计，$\lambda(s, a)$为自适应惩罚权重，$d(s, a)$为表征距离。保守Q值通过减去惩罚项，降低对分布外动作的价值估计。
+
+Q网络的训练目标为最小化时序差分误差：
+\begin{equation}\label{Eq:Chap3_q_loss}
+  \mathcal{L}_Q(\theta) = \mathbb{E}_{(s, a, r, s') \sim \mathcal{D}}\left[\left(Q_\theta(s, a) - y\right)^2\right]
+\end{equation}
+
+其中目标值$y$基于保守Q值计算：
+\begin{equation}\label{Eq:Chap3_target}
+  y = r + \gamma \mathbb{E}_{a' \sim \pi_\varphi(\cdot|s')}\left[\min_{j=1,2} \tilde{Q}_{\bar{\theta}_j}(s', a') - \alpha \log \pi_\varphi(a'|s')\right]
+\end{equation}
+
+其中$\tilde{Q}_{\bar{\theta}}$为目标网络的保守Q值估计，$\alpha$为熵正则化系数。采用双Q网络\cite{Fujimoto2018TD3}取最小值以进一步抑制过估计。
+
+策略网络的训练目标为最大化保守Q值与策略熵的加权和：
+\begin{equation}\label{Eq:Chap3_policy_loss}
+  J(\varphi) = \mathbb{E}_{s \sim \mathcal{D}, a \sim \pi_\varphi(\cdot|s)}\left[\tilde{Q}(s, a) - \alpha \log \pi_\varphi(a|s)\right]
+\end{equation}
+
+策略在保守Q值的引导下，倾向于选择分布内的高价值动作，自然规避分布外区域。
+
+与CQL\cite{Kumar2020CQL}相比，本文方法的保守性更加精细：CQL通过正则项$\mathbb{E}_\pi[Q] - \mathbb{E}_{\mathcal{D}}[Q]$全局性地压低策略分布下的Q值，而本文方法仅对分布外样本施加惩罚，分布内样本保留完整的优化空间。这使得策略在高质量离线数据上能够充分学习，同时对低质量或未覆盖区域保持保守。
+
+
+\section{理论分析}\label{Sec3.4}
+
+本节从理论角度分析基于表征距离的自适应保守惩罚相比固定惩罚的优势。核心结论是：自适应惩罚可获得更紧的策略性能下界。
+
+首先引入策略性能下界的概念。设$\eta(\pi)$为策略$\pi$的真实期望回报，$\hat{\eta}(\pi)$为基于学习得到的Q函数估计的期望回报。理想的保守算法应确保$\hat{\eta}(\pi) \leq \eta(\pi)$，即估计的性能不超过真实性能，从而避免选择实际表现不佳的策略。
+
+\begin{thm}[自适应惩罚的性能下界]\label{Thm:Chap3_bound}
+  设$\pi$为任意策略，$\tilde{Q}$为基于自适应惩罚的保守Q值估计。若惩罚权重$\lambda(s, a)$满足：
+  \begin{equation}
+    \lambda(s, a) \geq \frac{|Q^*(s, a) - Q_\theta(s, a)|}{d(s, a) + \epsilon}
+  \end{equation}
+  其中$Q^*$为最优Q函数，$\epsilon > 0$为正则化常数，则有：
+  \begin{equation}
+    \hat{\eta}(\pi) = \mathbb{E}_{s \sim \rho^\pi, a \sim \pi}[\tilde{Q}(s, a)] \leq \eta(\pi)
+  \end{equation}
+\end{thm}
+
+该定理表明：只要惩罚权重足够大以覆盖Q值估计误差，保守Q值即可提供真实性能的下界。自适应惩罚的优势在于：对于分布内样本，$d(s, a)$较小，Q值估计误差$|Q^* - Q_\theta|$通常也较小（因为有充足的训练数据），因此所需的惩罚权重较小；对于分布外样本，$d(s, a)$较大，惩罚权重相应增大，恰好匹配更大的估计误差。
+
+相比之下，固定惩罚需要取$\lambda = \max_{s,a} |Q^* - Q_\theta| / (d_{min} + \epsilon)$以确保对所有样本成立，这在分布内区域造成过度惩罚，导致性能下界过于保守。
+
+\begin{cor}[相比固定惩罚的改进]\label{Cor:Chap3_improvement}
+  设$\hat{\eta}_{adapt}$和$\hat{\eta}_{fixed}$分别为自适应惩罚和固定惩罚的估计性能。在相同保守性保证下：
+  \begin{equation}
+    \hat{\eta}_{adapt}(\pi) \geq \hat{\eta}_{fixed}(\pi)
+  \end{equation}
+  等号成立当且仅当所有样本的分布外程度相同。
+\end{cor}
+
+该推论表明：自适应惩罚在提供相同保守性保证的前提下，获得更紧的性能下界，从而有潜力学习到更优的策略。
+
+
+\section{算法流程}\label{Sec3.5}
+
+综合以上各节内容，本文提出的基于对比表征学习的保守离线策略优化算法（Contrastive Representation Learning for Conservative offline policy optimization, CRLC）的完整流程如算法\ref{Alg:Chap3_CRLC}所示。
+
+\begin{algorithm}[htbp]
+  \caption{基于对比表征学习的保守离线策略优化算法（CRLC）}
+  \label{Alg:Chap3_CRLC}
+  \begin{algorithmic}[1]
+    \Require 离线数据集$\mathcal{D}$，对比学习温度$\tau_{temp}$，基础惩罚系数$\lambda_0$，过渡参数$\beta$，分位数阈值$p$
+    \Ensure 优化后的策略$\pi_\varphi$
+    \State // 阶段1：对比表征学习
+    \State 初始化编码器$f_s, f_a$和投影头$g$
+    \For{$e = 1$ to $E_{pretrain}$}
+    \State 从$\mathcal{D}$采样批次轨迹片段
+    \State 构造正样本对（相邻时间步）和负样本对（跨轨迹）
+    \State 计算对比损失$\mathcal{L}_{CL}$（公式\ref{Eq:Chap3_infonce}）并更新编码器参数
+    \EndFor
+    \State // 阶段2：表征空间分布建模
+    \State 计算表征中心$\mu_{\mathcal{D}}$（公式\ref{Eq:Chap3_mean}）
+    \State 计算协方差矩阵$\Sigma_{\mathcal{D}}$（公式\ref{Eq:Chap3_covariance}）
+    \State 计算距离阈值$d_{threshold}$（公式\ref{Eq:Chap3_threshold}，取$p$分位数）
+    \State 冻结编码器参数
+    \State // 阶段3：自适应保守策略优化
+    \State 初始化策略网络$\pi_\varphi$、Q网络$Q_{\theta_1}, Q_{\theta_2}$及目标网络
+    \For{$k = 1$ to $K$}
+    \State 从$\mathcal{D}$采样批次$(s, a, r, s')$
+    \State 计算表征距离$d(s, a)$（公式\ref{Eq:Chap3_euclidean}或\ref{Eq:Chap3_mahalanobis}）
+    \State 计算自适应惩罚权重$\lambda(s, a)$（公式\ref{Eq:Chap3_adaptive_weight}）
+    \State 计算保守Q值$\tilde{Q}(s, a)$（公式\ref{Eq:Chap3_conservative_q}）
+    \State 更新Q网络（公式\ref{Eq:Chap3_q_loss}）
+    \State 更新策略网络（公式\ref{Eq:Chap3_policy_loss}）
+    \State 软更新目标网络
+    \EndFor
+    \State \Return 策略$\pi_\varphi$
+  \end{algorithmic}
+\end{algorithm}
+
+算法分为三个阶段：对比表征学习阶段约占总训练时间的20\%，表征空间分布建模为一次性计算，自适应保守策略优化阶段占主要训练时间。
+
+算法的时间复杂度主要由以下部分组成：（1）对比学习预训练，复杂度为$O(E_{pretrain} \cdot B \cdot L \cdot d_z)$，其中$B$为批次大小，$L$为轨迹长度；（2）表征距离计算，复杂度为$O(d_z)$或$O(d_z^2)$（马氏距离需矩阵乘法）；（3）策略和Q值网络更新，与标准SAC相同。由于编码器结构轻量，计算开销显著低于基于集成模型的方法。
+
+
+\section{实验验证}\label{Sec3.6}
+
+本节通过实验验证本文算法的有效性。实验设计旨在回答以下问题：（1）本文算法与现有离线强化学习方法相比表现如何？（2）对比表征学习是否有效构建了区分分布内外样本的表征空间？（3）表征距离能否准确反映样本的分布外程度？（4）自适应惩罚机制相比固定惩罚的优势如何？
+
+
+\subsection{实验设置}\label{Sec3.6.1}
+
+本节介绍实验所采用的数据集、实现细节和基线方法。
+
+在数据集选择方面，本文选取两类实验环境：
+
+（1）D4RL Antmaze导航任务\cite{Fu2020D4RL}。该任务要求智能体在迷宫环境中从起点导航至目标点，采用稀疏奖励设计（仅在到达目标时获得奖励）。选取三种迷宫规模（umaze、medium、large）和两种数据集类型（play、diverse），共计6个问题设置。相比MuJoCo连续控制任务，Antmaze的状态空间具有更明确的空间结构，便于分析表征学习的效果；稀疏奖励设计使得分布外检测更具挑战性，能够更好地验证本文方法的有效性。
+
+（2）2D Point导航合成实验。为直观验证对比表征学习的核心假设，设计简化的2D导航环境：智能体在二维平面上从随机起点导航至目标区域，状态为二维坐标，动作为二维速度向量。该环境的优势在于状态空间可直接可视化，便于分析表征空间与原始状态空间的对应关系。
+
+在基线方法方面，本文与以下算法进行对比：无模型离线强化学习算法CQL\cite{Kumar2020CQL}、IQL\cite{Kostrikov2022IQL}和TD3+BC\cite{Fujimoto2021TD3BC}；基于模型的离线强化学习算法MOPO\cite{Yu2020MOPO}。
+
+% TODO: 补充具体实验超参数设置
+
+
+\subsection{实验结果}\label{Sec3.6.2}
+
+% TODO: 补充Antmaze实验结果表格和分析
+
+
+\subsection{表征空间分析}\label{Sec3.6.3}
+
+本节设计一系列分析实验，验证对比表征学习构建的表征空间能够有效区分分布内外样本。
+
+\subsubsection{表征距离与Q值估计误差的相关性分析}
+
+为验证表征距离能够反映样本的分布外程度，分析表征距离$d(s,a)$与Q值估计误差$|Q_\theta(s,a) - Q^{MC}(s,a)|$的相关性。其中$Q^{MC}(s,a)$为蒙特卡洛回报估计，作为真实Q值的近似。若相关性显著为正，则表明表征距离大的样本确实对应更大的估计误差，验证了自适应惩罚的合理性。
+
+% TODO: 补充相关性分析图表
+
+\subsubsection{分布外检测的ROC曲线分析}
+
+将表征距离作为分布外检测的判别指标，绘制ROC曲线以量化检测精度。具体而言，将训练数据标记为分布内样本，将策略生成的分布外动作标记为分布外样本，计算不同阈值下的真阳性率和假阳性率。该分析可定量评估表征距离作为OOD指标的有效性。
+
+% TODO: 补充ROC曲线图表
+
+\subsubsection{2D导航环境的表征可视化}
+
+在2D Point导航合成环境中，直接可视化表征空间与原始状态空间的对应关系。由于原始状态为二维坐标，可将表征向量也投影至二维平面，观察对比学习是否保持了状态空间的拓扑结构，以及表征距离是否与距离数据集分布中心的空间距离一致。
+
+% TODO: 补充2D可视化图表
+
+
+\subsection{消融实验}\label{Sec3.6.4}
+
+为验证各算法组件的贡献，本节设计消融实验：
+
+（1）对比学习目标消融：比较轨迹感知对比学习、随机对比学习、无对比预训练三种设置。
+
+（2）距离度量消融：比较欧氏距离、马氏距离、余弦距离三种距离度量的效果。
+
+（3）自适应惩罚消融：比较自适应惩罚权重与固定惩罚权重的性能差异。
+
+（4）计算效率对比：比较本文单编码器方法与基于集成模型方法（如MOPO）的训练时间和推理时间。
+
+% TODO: 补充消融实验结果表格
+
+
+\section{本章小结}\label{Sec3.7}
+
+本章详细介绍了基于对比表征学习的保守离线策略优化算法。首先分析了现有离线强化学习方法在分布外检测与保守性调节方面的局限性，阐明了利用对比学习构建表征空间、基于表征距离实现自适应惩罚的核心思想。
+
+在技术实现层面，本章设计了状态-动作联合编码器网络结构，提出了轨迹感知的对比学习目标，利用时序结构定义正负样本关系；建立了基于高斯分布的表征空间建模方法，通过分位数阈值划分分布内外区域；设计了基于Sigmoid函数的自适应惩罚权重，实现惩罚强度随分布外程度的平滑变化。
+
+在理论分析层面，本章证明了自适应惩罚相比固定惩罚可获得更紧的策略性能下界，为算法的优越性提供了理论支撑。
+
+% TODO: 补充实验结论总结
+
+本章提出的方法为纯离线设定下的保守策略优化提供了新思路。然而，该方法的局限在于表征空间的覆盖范围受限于离线数据，无法主动扩展到未知区域。下一章将针对这一局限，引入在线微调阶段，将“被动惩罚分布外”转变为“主动探索分布外”，通过定向探索策略突破离线数据的边界。
