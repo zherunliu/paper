@@ -253,23 +253,25 @@
   \centering
   \caption{D4RL基准测试集上的性能对比}
   \label{Tab:Chap4_Performance}
-  \begin{tabular}{llrrrrrrr}
-    \toprule
-    数据集类型         & 环境          & 本文算法                     & MOPO & COMBO & AWAC  & MOREL & CQL   & TD3+BC           \\
-    \midrule
-    medium        & halfcheetah & $\mathbf{70.5 \pm 4.2}$  & 42.3 & 54.2  & 41.1  & 42.1  & 44.4  & 42.8             \\
-                  & hopper      & $65.5 \pm 10.9$          & 28.0 & 97.2  & 91.0  & 95.4  & 86.6  & $\mathbf{99.5}$  \\
-                  & walker2d    & $\mathbf{86.6 \pm 0.5}$  & 17.8 & 81.9  & 79.1  & 77.8  & 74.5  & 79.7             \\
-    \midrule
-    medium-replay & halfcheetah & $\mathbf{73.1 \pm 0.4}$  & 53.1 & 55.1  & -     & 40.2  & 46.2  & 43.3             \\
-                  & hopper      & $\mathbf{96.1 \pm 5.9}$  & 67.5 & 89.5  & -     & 93.6  & 48.6  & 31.4             \\
-                  & walker2d    & $\mathbf{82.6 \pm 0.3}$  & 39.0 & 56.0  & -     & 49.8  & 32.6  & 25.2             \\
-    \midrule
-    medium-expert & halfcheetah & $75.4 \pm 13.3$          & 63.3 & 90.0  & 41.0  & 53.3  & 62.4  & $\mathbf{97.9}$  \\
-                  & hopper      & $102.2 \pm 0.8$          & 23.7 & 111.1 & 111.9 & 108.7 & 111.0 & $\mathbf{112.2}$ \\
-                  & walker2d    & $\mathbf{111.4 \pm 0.4}$ & 44.6 & 103.3 & 78.3  & 95.6  & 98.7  & 101.1            \\
-    \bottomrule
-  \end{tabular}
+  \resizebox{\textwidth}{!}{
+    \begin{tabular}{llrrrrrrr}
+      \toprule
+      数据集类型         & 环境          & 本文算法                     & MOPO & COMBO & AWAC  & MOREL & CQL   & TD3+BC           \\
+      \midrule
+      medium        & halfcheetah & $\mathbf{70.5 \pm 4.2}$  & 42.3 & 54.2  & 41.1  & 42.1  & 44.4  & 42.8             \\
+                    & hopper      & $65.5 \pm 10.9$          & 28.0 & 97.2  & 91.0  & 95.4  & 86.6  & $\mathbf{99.5}$  \\
+                    & walker2d    & $\mathbf{86.6 \pm 0.5}$  & 17.8 & 81.9  & 79.1  & 77.8  & 74.5  & 79.7             \\
+      \midrule
+      medium-replay & halfcheetah & $\mathbf{73.1 \pm 0.4}$  & 53.1 & 55.1  & -     & 40.2  & 46.2  & 43.3             \\
+                    & hopper      & $\mathbf{96.1 \pm 5.9}$  & 67.5 & 89.5  & -     & 93.6  & 48.6  & 31.4             \\
+                    & walker2d    & $\mathbf{82.6 \pm 0.3}$  & 39.0 & 56.0  & -     & 49.8  & 32.6  & 25.2             \\
+      \midrule
+      medium-expert & halfcheetah & $75.4 \pm 13.3$          & 63.3 & 90.0  & 41.0  & 53.3  & 62.4  & $\mathbf{97.9}$  \\
+                    & hopper      & $102.2 \pm 0.8$          & 23.7 & 111.1 & 111.9 & 108.7 & 111.0 & $\mathbf{112.2}$ \\
+                    & walker2d    & $\mathbf{111.4 \pm 0.4}$ & 44.6 & 103.3 & 78.3  & 95.6  & 98.7  & 101.1            \\
+      \bottomrule
+    \end{tabular}
+  }
 \end{table}
 
 从表\ref{Tab:Chap4_Performance}可以看出，本文算法在多数任务上取得了优异的性能表现。在medium-replay数据集的全部三个环境中，本文算法均取得最高得分，显著优于所有基线方法。这一结果表明，当离线数据质量参差不齐时，本文的定向探索策略能够有效识别并补充高价值区域的样本，显著提升策略性能。
@@ -287,7 +289,7 @@
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.9\textwidth]{figures/tsne.pdf}
+  \includegraphics[width=1\textwidth]{figures/tsne.pdf}
   \caption{模型预测状态与离线数据的对比。将模型预测状态和离线状态数据密度在三种不同离线数据集上进行可视化。散点表示模型的数据分布，预测Q值经归一化后作为散点的颜色。}
   \label{Fig:Chap4_tsne}
 \end{figure}

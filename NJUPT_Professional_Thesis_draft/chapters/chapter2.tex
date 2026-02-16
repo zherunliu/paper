@@ -1,6 +1,6 @@
 \chapter{理论基础与相关工作}\label{Chap:chap2}
 
-本章首先介绍强化学习的理论基础，建立本文所需的数学框架；随后对离线强化学习、离线到在线强化学习领域的相关工作进行系统综述，分析现有方法的发展脉络、核心优势与局限，阐明本文研究动机。
+本章首先介绍强化学习的理论基础，建立本文所需的数学框架，包括马尔可夫决策过程、基于模型的离线强化学习框架、不确定性估计以及对比表征学习；随后对离线强化学习、离线到在线强化学习领域的相关工作进行系统综述，分析现有方法的发展脉络、核心优势与局限，阐明本文研究动机。
 
 
 \section{理论基础}\label{Sec2.1}
@@ -14,40 +14,40 @@
 
 状态价值函数$V_M^\pi(s)$定义为在MDP $M$中，从状态$s$出发并遵循策略$\pi$所能获得的期望折扣回报：
 \begin{equation}\label{Eq:Chap2_value_function}
-	V_M^\pi(s) = \mathbb{E}_{\pi, M}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t) \mid s_0 = s\right]
+  V_M^\pi(s) = \mathbb{E}_{\pi, M}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t) \mid s_0 = s\right]
 \end{equation}
 
 其中$s_t$和$a_t$分别表示时刻$t$的状态和动作，期望在策略$\pi$和环境动力学$M$下计算。状态价值函数衡量的是智能体处于特定状态时的长期预期收益。
 
 动作价值函数$Q_M^\pi(s,a)$定义为在状态$s$执行动作$a$后，继续遵循策略$\pi$所能获得的期望折扣回报：
 \begin{equation}\label{Eq:Chap2_q_function}
-	Q_M^\pi(s,a) = \mathbb{E}_{\pi, M}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t) \mid s_0 = s, a_0 = a\right]
+  Q_M^\pi(s,a) = \mathbb{E}_{\pi, M}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t) \mid s_0 = s, a_0 = a\right]
 \end{equation}
 
 动作价值函数衡量的是在特定状态下执行特定动作的长期预期收益。
 
 状态价值函数与动作价值函数之间存在如下关系：
 \begin{equation}\label{Eq:Chap2_v_q_relation}
-	V_M^\pi(s) = \mathbb{E}_{a \sim \pi(\cdot|s)}[Q_M^\pi(s,a)] = \sum_{a \in \mathcal{A}} \pi(a|s) Q_M^\pi(s,a)
+  V_M^\pi(s) = \mathbb{E}_{a \sim \pi(\cdot|s)}[Q_M^\pi(s,a)] = \sum_{a \in \mathcal{A}} \pi(a|s) Q_M^\pi(s,a)
 \end{equation}
 
 即状态价值等于该状态下所有动作价值在策略分布下的期望。反之，动作价值函数可通过贝尔曼期望方程表示为：
 \begin{equation}\label{Eq:Chap2_bellman}
-	Q_M^\pi(s,a) = r(s,a) + \gamma \mathbb{E}_{s' \sim T(\cdot|s,a)}[V_M^\pi(s')]
+  Q_M^\pi(s,a) = r(s,a) + \gamma \mathbb{E}_{s' \sim T(\cdot|s,a)}[V_M^\pi(s')]
 \end{equation}
 
 即当前奖励与后继状态价值折扣期望之和。
 
 为分析策略在状态-动作空间上的访问行为，引入折扣状态-动作访问分布$\rho_M^\pi(s,a)$，定义为策略$\pi$在MDP $M$中访问状态-动作对$(s,a)$的非归一化折扣频率：
 \begin{equation}\label{Eq:Chap2_visit_distribution}
-	\rho_M^\pi(s,a) = \pi(a|s) \sum_{t=0}^{\infty} \gamma^t P(s_t = s | \pi, M)
+  \rho_M^\pi(s,a) = \pi(a|s) \sum_{t=0}^{\infty} \gamma^t P(s_t = s | \pi, M)
 \end{equation}
 
 其中$P(s_t=s | \pi, M)$表示从初始分布$\mu_0$出发，遵循策略$\pi$于时刻$t$到达状态$s$的概率。该分布刻画了策略的状态-动作空间覆盖特性：$\rho_M^\pi(s,a)$值较大的区域对应策略频繁访问的区域，反之则对应策略较少探索的区域。
 
 基于上述定义，策略的期望折扣回报$\eta_M^\pi$作为评估策略整体性能的核心指标，可通过以下三种等价形式表示：
 \begin{equation}\label{Eq:Chap2_expected_return}
-	\eta_M^\pi = \mathbb{E}_{s_0 \sim \mu_0}[V_M^\pi(s_0)] = \mathbb{E}_{s_0 \sim \mu_0, a_0 \sim \pi(\cdot|s_0)}[Q_M^\pi(s_0, a_0)] = \mathbb{E}_{(s,a) \sim \rho_M^\pi} \left[ r(s, a) \right]
+  \eta_M^\pi = \mathbb{E}_{s_0 \sim \mu_0}[V_M^\pi(s_0)] = \mathbb{E}_{s_0 \sim \mu_0, a_0 \sim \pi(\cdot|s_0)}[Q_M^\pi(s_0, a_0)] = \mathbb{E}_{(s,a) \sim \rho_M^\pi} \left[ r(s, a) \right]
 \end{equation}
 
 第一种形式从初始状态价值的角度表述期望回报；第二种形式从初始状态-动作价值的角度表述，便于与基于Q函数的算法衔接；第三种形式从访问分布的角度表述，将期望回报理解为策略访问的所有状态-动作对上奖励的加权平均。MDP的优化目标是求解最大化期望折扣回报的最优策略$\pi^* = \arg\max_\pi \eta_M^\pi$。
@@ -61,12 +61,12 @@
 
 转移模型通常采用参数化高斯分布进行建模：
 \begin{equation}\label{Eq:Chap2_transition_model}
-	\hat{T}_{\theta}(s', r|s, a) = \mathcal{N}(\mu_{\theta}(s, a), \Sigma_{\theta}(s, a))
+  \hat{T}_{\theta}(s', r|s, a) = \mathcal{N}(\mu_{\theta}(s, a), \Sigma_{\theta}(s, a))
 \end{equation}
 
 其中$\mu_{\theta}(s, a)$为条件均值函数，$\Sigma_{\theta}(s, a)$为条件协方差矩阵，均由参数为$\theta$的神经网络拟合。模型参数通过最大化离线数据的对数似然进行优化：
 \begin{equation}\label{Eq:Chap2_model_loss}
-	\mathcal{L}(\theta) = -\mathbb{E}_{(s,a,s',r) \sim \mathcal{D}_{off}}[\log \hat{T}_{\theta}(s', r|s, a)]
+  \mathcal{L}(\theta) = -\mathbb{E}_{(s,a,s',r) \sim \mathcal{D}_{off}}[\log \hat{T}_{\theta}(s', r|s, a)]
 \end{equation}
 
 完成模型学习后，策略可通过与学习得到的转移模型交互生成虚拟轨迹进行优化，无需访问真实环境。这一特性使基于模型的方法具有更高的样本效率，尤其适用于数据采集成本高昂的实际应用场景。
@@ -84,10 +84,31 @@
 
 在基于模型的强化学习中，集成动力学模型的每个成员$\hat{T}_{\phi}^i$输出高斯分布$\mathcal{N}(\mu_{\phi}^i(s,a), \Sigma_{\phi}^i(s,a))$。其中，单个模型的预测方差$\Sigma_\phi^i(s,a)$反映偶然不确定性，刻画环境动力学的内在随机性。为捕捉认知不确定性，可利用集成模型均值预测的分歧度定义如下度量：
 \begin{equation}\label{Eq:Chap2_disvar}
-	\text{DisVar}(s,a) = \frac{1}{d}\sum_{j=1}^d \text{Var}_{i=1,\ldots,N}[\mu_{\phi,j}^i(s,a)]
+  \text{DisVar}(s,a) = \frac{1}{d}\sum_{j=1}^d \text{Var}_{i=1,\ldots,N}[\mu_{\phi,j}^i(s,a)]
 \end{equation}
 
 其中$d$为预测向量的维度，$\mu_{\phi,j}^i(s,a)$表示第$i$个模型预测均值的第$j$个分量，$\text{Var}_{i=1,\ldots,N}[\cdot]$表示在$N$个集成成员间计算方差。该度量的核心思想是：在数据充分覆盖的区域，各模型收敛至相近的预测，分歧度较低；在数据稀疏的区域，模型因初始化差异而产生显著不同的预测，分歧度较高。本文将在算法设计中融合两类不确定性信息，实现更高效的在线探索策略。
+
+
+\subsection{对比表征学习与分布外检测}\label{Sec2.1.4}
+
+除了集成模型的不确定性估计，表征学习提供了另一种检测分布外样本的思路。对比学习（Contrastive Learning）是近年来表征学习领域的重要进展，通过拉近正样本对、推远负样本对，可学习到紧凑且结构化的表征空间\cite{Chen2020SimCLR}。
+
+InfoNCE损失\cite{Oord2018CPC}是对比学习中广泛采用的目标函数，定义为：
+\begin{equation}\label{Eq:Chap2_infonce}
+  \mathcal{L}_{NCE} = -\mathbb{E}\left[\log \frac{\exp(\text{sim}(z_i, z_j^+)/\tau)}{\exp(\text{sim}(z_i, z_j^+)/\tau) + \sum_{k} \exp(\text{sim}(z_i, z_k^-)/\tau)}\right]
+\end{equation}
+
+其中$z_i$为锚点样本的表征，$z_j^+$为正样本的表征，$z_k^-$为负样本的表征，$\text{sim}(\cdot, \cdot)$为余弦相似度，$\tau$为温度参数。InfoNCE损失通过最大化正样本对的相似度、最小化负样本对的相似度，引导编码器学习具有判别性的表征。
+
+在强化学习场景中，对比学习可用于构建状态-动作的联合表征空间。利用轨迹的时序结构定义正负样本关系：同一轨迹内时间相邻的状态-动作对构成正样本对，不同轨迹的样本构成负样本对。这种设计无需额外的数据增强，直接利用强化学习数据的内禁结构。
+
+完成对比学习预训练后，离线数据集中的样本将聚集在表征空间的中心区域附近，而分布外样本则远离中心。基于这一特性，可利用表征距离（如欧氏距离或马氏距离）作为分布外程度的量化指标：
+\begin{equation}\label{Eq:Chap2_ood_distance}
+  d_{OOD}(s, a) = \|z(s, a) - \mu_{\mathcal{D}}\|_2
+\end{equation}
+
+其中$z(s, a)$为状态-动作对的表征向量，$\mu_{\mathcal{D}}$为离线数据集在表征空间中的均值向量。该距离度量相比集成模型的不确定性估计，计算成本更低，且直接刻画离线数据的支撑集边界，为实现精确的分布外检测提供了新的技术路径。本文第三章将详细介绍基于对比表征学习的分布外检测方法及其在保守离线策略优化中的应用。
 
 
 \section{相关工作}\label{Sec2.2}
@@ -130,6 +151,6 @@
 
 \section{本章小结}\label{Sec2.3}
 
-本章首先介绍了强化学习的理论基础，包括MDP框架、基于模型的离线强化学习框架以及集成模型的不确定性估计方法。在相关工作部分，系统综述了离线强化学习与离线到在线强化学习的发展历程：无模型离线强化学习通过策略约束或价值正则化抑制分布外过估计，优势在于理论保证完善、实现简洁，局限在于样本效率低、保守性可能限制性能；基于模型离线强化学习通过学习转移模型提升样本效率，优势在于可生成额外数据，局限在于不确定性信息仅用于惩罚而非引导探索；离线到在线强化学习通过保守性调节或数据融合平滑过渡，优势在于结合两阶段优势，局限在于保守性与灵活性矛盾、在线交互成本高、不确定性利用不充分。
+本章首先介绍了强化学习的理论基础，包括MDP框架、基于模型的离线强化学习框架、集成模型的不确定性估计方法以及对比表征学习的分布外检测原理。在相关工作部分，系统综述了离线强化学习与离线到在线强化学习的发展历程：无模型离线强化学习通过策略约束或价值正则化抑制分布外过估计，优势在于理论保证完善、实现简洁，局限在于样本效率低、保守性可能限制性能；基于模型离线强化学习通过学习转移模型提升样本效率，优势在于可生成额外数据，局限在于不确定性信息仅用于惩罚而非引导探索；离线到在线强化学习通过保守性调节或数据融合平滑过渡，优势在于结合两阶段优势，局限在于保守性与灵活性矛盾、在线交互成本高、不确定性利用不充分。
 
-基于上述分析，本文提出基于定向探索模型的离线到在线强化学习算法。这种方法继承了基于模型方法的样本效率优势，同时创新性地将不确定性信息用于引导在线探索而非仅用于惩罚：显式引导策略探索高不确定性且高价值的区域，有效补充转移模型，以最少的在线交互实现高效微调。
+基于上述分析，本文提出两种互补的算法方案。第一，基于对比表征学习的保守离线策略优化算法：利用对比学习构建状态-动作表征空间，基于表征距离实现精确的分布外检测，设计自适应惩罚机制在保守性与优化空间间取得平衡。第二，基于定向探索模型的离线到在线强化学习算法：继承基于模型方法的样本效率优势，创新性地将不确定性信息用于引导在线探索，显式引导策略探索高不确定性且高价值的区域，以最少的在线交互实现高效微调。两种方法形成递进关系：前者解决纯离线设定下的保守策略优化问题，后者引入在线微调阶段突破离线数据的边界。
