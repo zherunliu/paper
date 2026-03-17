@@ -1,0 +1,301 @@
+\documentclass{article}
+\usepackage{amsmath,amssymb,graphicx,ctex,multirow,booktabs}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\renewcommand{\baselinestretch}{1.2}
+\begin{document}
+
+% 期刊头部信息
+\noindent \textbf{第44卷第4期 2024年8月} \quad 南京邮电大学学报(自然科学版) \\
+\noindent \textbf{Vol. 44 No. 4} \quad Journal of Nanjing University of Posts and Telecommunications (Natural Science Edition) \quad \textbf{Aug. 2024} \\
+\noindent doi:10.14132/j.cnki.1673-5439.2024.04.009
+
+% 标题
+\begin{center}
+  \Large \textbf{基于自适应不确定性度量的离线强化学习算法} \\
+  \vspace{0.5em}
+  \small 张伯雷, 刘哲闰 \\
+  \vspace{0.3em}
+  \small 南京邮电大学 计算机学院, 江苏 南京 210023 \\
+\end{center}
+
+% 收稿、修回、基金、作者简介
+\noindent \textbf{收稿日期}:2023-08-26; \textbf{修回日期}:2023-10-24 \quad 本刊网址:http://nyzr.njupt.edu.cn \\
+\noindent \textbf{基金项目}:国家自然科学基金(62202238)资助项目 \\
+\noindent \textbf{作者简介}:张伯雷,男,博士,讲师,bolei.zhang@njupt.edu.cn \\
+\noindent \textbf{引用本文}:张伯雷,刘哲闰. 基于自适应不确定性度量的离线强化学习算法[J]. 南京邮电大学学报(自然科学版),2024,44(4):98-104.
+
+% 中文摘要与关键词
+\begin{abstract}
+  离线强化学习可以从历史经验数据中直接学习出可执行的策略，由此来避免与在线环境的高代价交互，可应用于机器人控制、无人驾驶、智能营销等多种真实场景。有模型的离线强化学习首先通过监督学习构造环境模型，并通过与该环境模型交互来优化学习策略，具有样本效率高的特点，是最常用的离线强化学习算法。然而，由于离线数据集存在分布偏移问题，现有的方法往往通过静态的方法来评估此种不确定性，无法动态自适应于智能体策略的优化过程。针对以上问题，提出一种自适应的不确定性度量方法，首先对状态的不确定性进行估计，然后通过动态自适应的方法来衡量环境模型的不确定性，从而使得智能体可以在探索-保守中取得更好的平衡。在多个基准的离线数据集对算法进行了验证，实验结果表明，该算法在多个数据集中都取得最好的效果，消融实验等也验证了所提方法的有效性。
+\end{abstract}
+\noindent \textbf{关键词}:离线强化学习; 环境模型; 自适应权重; 不确定性度量 \\
+\noindent \textbf{中图分类号}:TP311 \quad \textbf{文献标识码}:A \quad \textbf{文章编号}:1673-5439(2024)04-0098-07
+
+% 英文标题、作者、单位、摘要、关键词
+\begin{center}
+  \small \textbf{Adaptive Uncertainty Quantification for Model-based Offline Reinforcement Learning} \\
+  \vspace{0.3em}
+  \small Bolei ZHANG, Zherun LIU \\
+  \vspace{0.3em}
+  \small School of Computer Science, Nanjing University of Posts and Telecommunications, Nanjing 210023, China
+\end{center}
+\begin{abstract}
+  Offline reinforcement learning (RL) can directly learn executable policies from historical experience data, thus avoiding costly interactions with the online environment, and can be applied to various real scenarios such as robot manipulation, autonomous driving, intelligent recommendation, etc. Model-based offline RL first constructs an environmental model through supervised learning, then interacts with this model to optimize the policy. It has high sample efficiency and is widely considered a promising approach in related studies. However, the offline dataset has a distributional shift problem, which can lead to out-of-distribution uncertainty. Current methods mainly use static metrics to measure the environment model uncertainty and cannot adapt to the dynamic policy optimization process. Targeting the above problem, we propose a novel adaptive uncertainty quantification method. This method first estimates the uncertainty of each state, then uses a dynamic adaptive method to measure the uncertainty of the environment model. Thus a better trade-off between radicalism and conservatism can be achieved for the agent. Evaluations on multiple offline benchmarks demonstrate the usefulness and effectiveness of the proposed measurements.
+\end{abstract}
+\noindent \textbf{Keywords}:offline reinforcement learning (RL); environment model; adaptive weight; uncertainty quantification
+
+% 正文开始
+\section{引言}
+近年来，深度强化学习(Deep Reinforcement Learning, DRL)$^{[1]}$已经在多个模拟环境的序列决策中取得了巨大的进展，如围棋$^{[2]}$、雅达利游戏$^{[3]}$、机器人控制$^{[4]}$等。强化学习主要通过探索-利用(exploration-exploitation)与环境进行交互，并以实现最大化长期累积奖赏为目标来进行策略优化。然而，在很多真实环境中，强化学习这种随机的探索策略往往具有较高的代价或风险，例如在自动驾驶中，随机的探索可能导致事故的发生；在智能营销中，不合适的营销策略会导致用户体验的下降与成本的损失；在健康医疗中，甚至可能危及病人的生命。最近的研究工作开始探索如何只利用历史离线数据进行策略优化，而不与真实环境进行在线交互。相较于高成本的探索交互，离线数据集更容易获取，因此这种范式更容易在真实环境中部署。
+
+基于离线数据集，一种直接的方式是使用离策略(off-policy)方法(如DQN$^{[3]}$等)直接在数据集中进行策略优化。然而，由于离线数据集往往由行为策略来收集，以上的方法往往会存在分布偏移(distributional shift)问题$^{[5]}$：即数据集中的状态-动作分布与真实环境中的状态-动作分布不一致，导致当前策略难以准确评估环境未来的环境转移，难以达到较高的性能。
+
+为了修正以上的分布偏移问题，现有的离线强化主要采用免模型(model-free)$^{[6-9]}$和有模型(model-based)$^{[10-14]}$两类方法。在免模型离线强化学习中，算法直接在离策略方法中引入保守性来限制智能体对自身状态值函数(value function)的估计。然而免模型的方法由于只能使用离策略在已有数据集进行优化，因此其性能往往受限于数据集的规模，当数据集规模较小时，算法的性能一般。在有模型离线强化学习算法中，首先通过监督学习模型构建环境的状态转移函数，然后与该模型交互实现策略优化，因此具有更好的样本效率。
+
+有模型离线强化学习主要通过数据增广或不确定性衡量来避免分布偏移问题。数据增广方法主要通过生成有噪声的相似数据来扩充数据集，并且提升环境模型的鲁棒性；而不确定性衡量则是引入新的指标来评估智能体在执行相应动作行为之后的环境状态的不确定性，通过避免让智能体进入不确定性环境来减少分布偏移。尽管现有的有模型强化学习方法已经在一些数据集中取得了较好的效果，但当前的方法仍然难以在保守性和探索性中取得平衡：过度的保守虽然可以避免分布偏移，但其往往采用静态的方法，容易导致智能体难以充分探索，无法有效提升策略。因此，在离线强化学习中，自适应评估环境转移的不确定性非常重要，智能体既需要充分探索环境来优化策略，也需要适当的保守来避免分布偏移。
+
+本文提出一种新的基于自适应不确定性的有模型离线强化学习算法，其基本思想是通过动态、自适应地调整不确定性估计来进行强化学习策略优化，使得智能体可以根据策略优化的过程来动态估计这种不确定性，从而在保守-探索中取得更好的平衡。智能体处于当前状态时，具有3种动作选择，根据环境模型的预测，采取各个动作之后的状态转移分别具有不同的不确定性，箭头颜色越浅代表不确定性越大。智能体不仅需要评估不同状态转移的不确定性，同时也需要评估目标状态的不确定性。基于该不确定性的评估，智能体可以通过自适应动态权重的方法，在策略优化的初始阶段增加探索，并在策略逐渐收敛的时候提升保守性，以此来获取更优的策略。在多个基准的离线数据集对提出的算法进行了验证，实验结果表明，该算法可以在多个数据集中都取得当前最好的效果，同时消融实验等也验证了所提方法的有效性。
+
+本文的主要贡献如下：
+\begin{enumerate}
+  \item 引入了对状态累积不确定性的衡量方法，对智能体在策略优化过程中每个状态的不确定性进行评估，并引导智能体避免进入分布外的状态；
+  \item 提出一种基于自适应不确定性评估的方法，使得智能体可以动态调整对环境不确定性的评估，提升探索-保守的平衡性。
+\end{enumerate}
+
+\section{背景知识与相关工作}
+\subsection{深度强化学习}
+在深度强化学习中，智能体通过序列决策和环境交互，这个交互过程一般被建模为一个马尔可夫决策过程(Markov Decision Process, MDP)$^{[15]}$。MDP可以定义为以下的六元组：
+\[
+  \langle S, A, R, T, \mu_0, \gamma \rangle
+\]
+其中$S$为状态集合，$A$为动作集合，$R(s, a)$为奖赏函数，$T(s', r | s, a)$为状态转移函数，$\mu_0$为初始状态的分布，$\gamma \in (0,1]$为折扣因子。其中状态转移函数需要满足马尔可夫性质，即环境的下一个状态$s'$和奖赏$r$只由当前的状态$s$和动作$a$决定，而和更早的状态无关。
+
+基于MDP，智能体需要优化自己的策略函数$\pi(a | s)$，并最大化自己的长期累积收益：
+\[
+  V^{\pi}(S_0) = \mathbb{E}_{\pi, s_0 \sim \mu_0}\left[ \sum_{i=0}^{\infty} \gamma^i R(s_i, a_i) \right]
+\]
+为实现以上目的，现有的深度强化学习算法主要分为基于值函数和基于策略梯度的方法。
+
+在基于值函数的方法如DQN (Deep Q-Learning)$^{[3]}$中，通过神经网络来估计智能体的动作值函数：
+\[
+  Q^{\pi}(s, a) = \sum_{s' \in S} T(s' | s, a) \left[ R(s, a) + \gamma V^{\pi}(s') \right]
+\]
+然后通过最小化时间差分误差来优化神经网络参数：
+\[
+  \sum_{i}^{N}\left[Q_{\phi}(s_i, a_i)-\left(r_i+\gamma \max_{a'} Q_{\psi}\left(s_i', a'\right)\right)\right]^{2} \tag{1}
+\]
+式中：$\phi、\psi$为神经网络$Q$的参数。
+
+相较于基于值函数的方法，基于策略梯度的方法不再去估计动作值函数，而是直接用神经网络来估计参数为$\phi$的动作函数$\pi_{\phi}(a | s)$，并通过策略梯度定理直接对参数$\phi$进行优化。在演员-评论家算法(actor-critic)中，综合了值函数方法与策略梯度方法的优点，同时去估计值函数与策略函数，是当前使用最广泛的方法。在柔性演员-评论家算法(Soft Actor-Critic, SAC)$^{[16]}$中，包含有一个策略网络、两个值函数网络和两个动作值函数网络，并通过增加策略的探索等方法取得了当前最好的效果之一。
+
+\subsection{离线强化学习}
+随着深度强化学习在模拟环境中不断取得的巨大进展，研究者开始考虑如何通过低成本的探索将深度强化学习直接部署于真实环境之中。在离线强化学习中，智能体不再能与环境进行直接交互获取下一个状态和奖赏，而是只能根据已有的离线数据集$D_{env} = \{(s_i, a_i, r_i, s_i')\}_{i=1}^{|D|}$来优化当前的策略，并希望在离线数据集中优化的策略，也可以在在线环境中取得较好的效果。
+
+然而，由于离线数据集是由行为策略收集，其和当前智能体的策略不一致，导致直接根据离线数据集进行策略优化会产生分布偏移问题。为了解决该问题，当前的离线强化学习方法主要分为免模型方法和有模型方法。
+
+\subsubsection{免模型离线强化学习}
+在免模型离线强化学习算法中，智能体直接根据离线数据集来优化自己的策略。为了避免分布偏移问题，近年的工作主要考虑了以下几种方面：BC$^{[6]}$等方法直接对目标策略进行了约束，使得目标策略与收集数据集的行为策略之间的差距控制在合理范围之内，由此来保证策略的安全性；CQL$^{[7]}$、IQL$^{[8]}$等方法通过使用重要性采样(importance sampling)，赋予分布内数据更高的权重来达到类似的效果；近年的方法$^{[9]}$还考虑了集成学习的方法，来获取更稳健的值函数估计。然而，免模型方法容易受限于数据集的样本效率，在样本量比较小且行为策略性能较低的情况下，很难取得较好的效果。
+
+\subsubsection{有模型离线强化学习}
+有模型方法可先从离线数据集中学习环境模型，然后通过与环境模型交互来优化智能体策略，因此具有更好的样本效率。但是，由于环境模型的不确定性，此方法也会造成策略的分布偏移问题。
+
+为了解决以上问题，MOPO$^{[10]}$提出了使用模型方差对不确定性进行度量，并通过重塑奖赏函数来提升策略的保守性；MoReL$^{[11]}$通过构建一个悲观的MDP来限制过估计的状态转移发生；MOAN$^{[12]}$提出了一种基于对抗的方法，可以更准确地估计模型的不确定性；SDV$^{[13]}$利用了状态的估值信息，并通过双重验证的方法使得智能体更容易探索对自己有利的方向；RAMBO$^{[14]}$也通过对抗训练的方式来构建环境模型，该环境模型可以具有更好的鲁棒性。
+
+然而，现有的有模型离线强化学习算法，仍然难以在探索-保守之间取得一个平衡，其中一个重要的因素是现有的方法往往只考虑了静态的不确定性估计，而智能体在优化策略的过程中，这种不确定性是动态变化的，这也是本文的主要出发点之一。
+
+\section{方法}
+尽管现有的有模型离线强化学习从多种角度研究了如何衡量不确定性，并在探索-保守之间取得平衡，但是，大多数方法采用静态的的衡量方法，而在实际情况中，由于智能体的策略一直在迭代优化，因此对于环境状态的不确定性也是动态变化的。基于以上考虑，本文提出一种基于自适应不确定性的离线强化学习算法，可以在策略优化的过程中动态地调整对不确定性的度量，在探索-保守中取得更好的平衡。
+
+\subsection{累积状态不确定性度量}
+如上所述，在有模型离线强化学习中，一般通过神经网络来学习环境的状态转移函数$\hat{T}_{\theta}(s', r | s, a)$，网络的输入为当前的状态$s$与动作$a$，网络的输出为下一个状态$s'$与奖赏$r$的分布，$\theta$为网络的参数。可以用高斯分布来对状态和奖赏进行建模，则转移函数的输出表示为：
+\[
+  \hat{T}_{\theta}(s', r | s, a) = \mathcal{N}\left( \mu_{\theta}(s, a), \Sigma_{\theta}(s, a) \right)
+\]
+其中$\mu_{\theta}(s, a)$为输出的均值，$\Sigma_{\theta}(s, a)$为输出的方差。在MOPO$^{[10]}$等文献中使用该方差作为对状态-动作的不确定性度量。
+
+本文在状态转移不确定度量的基础上，提出一种对状态不确定性的度量。在以上方法中，仅仅考虑了对下一时刻预测的不确定性，而在实际情况中，状态$S$本身也可能具有不确定性。由于强化学习是序列决策的过程，如果在上一步就进入了一个不确定的状态，则这种不确定性会不断累积，导致更严重的策略失效。为了解决以上问题，本文引入一种新的状态累积的不确定性度量，其形式化定义如下：
+\[
+  u\left(s_{t}\right) = \mathbb{E}\left[ \sum_{t'=0}^{t} \omega^{t-t'} \log \left( \Sigma_{\theta}\left(s_{t'}, a_{t'}\right) + 1 \right) \right] \tag{2}
+\]
+式中：$\omega \in (0,1]$为折扣因子。根据式(2)，状态$s_t$的不确定性可以描述为从初始状态到当前状态的累积不确定性的对数之和。引入折扣因子$\omega$是由于从不同的状态都有可能达到$s_t$，因此给时序上更近的状态赋予更高的权重。
+
+基于该方法，当智能体在与环境模型交互的过程中，每到一个状态时，都需要记录该状态的累积不确定性，并通过以下方式进行更新：
+\[
+  u\left(s'\right) = \omega u(s) + \log \left( \Sigma_{\theta}(s, a) + 1 \right) \tag{3}
+\]
+
+通过累积状态的不确定性，智能体可以获取对当前状态的不确定性评估。在与环境模型的探索决策过程中，当智能体处于状态$s$时，根据可能采取的行为$a$，首先通过环境模型获取下一时刻的状态$s'$和奖赏$r'$，然后分别获取对状态的不确定性$u(s')$和对环境转移的不确定性$\Sigma_{\theta}(s, a)$。最终通过以下方式进行奖赏函数的重塑：
+\[
+  \tilde{r}_{t} = \gamma \left( \alpha u\left(s'\right) + \Sigma_{\theta}(s, a) \right) \tag{4}
+\]
+式中：$\alpha$为可调整的超参数，用来定义不同项的权重。
+
+\subsection{自适应动态权重}
+通过以上方法，智能体不仅可以获取对环境状态转移的不确定性估计，同时也可以对进入的状态的不确定性进行评估，从而采取相对保守的行为策略。然而，仅仅根据以上方法，很有可能陷入过于保守的情况，为了让智能体更有效地进行探索，本文引入一个自适应的动态权重系数，定义为：
+\[
+  \lambda_{k} = \frac{\lambda_{0}}{1+e^{K_{0}-k}} \tag{5}
+\]
+式中$k$为当前训练的轮次数，$K_{0}$为预定义的超参数。根据以上形式，权重系数会遵循sigmoid函数的曲线，在训练初期的轮次时，权重系数较小接近于0，随着训练轮次的逐渐增加，权重系数会越来越大并逼近于1。即智能体对环境状态的不确定性会逐渐增加，并且会变得更加保守。
+
+采用这种动态权重的原因是：在训练的初始阶段，智能体可以增加探索性，尽量去探索环境模型中的各个状态；而随着智能体策略的逐渐优化和稳定，则增加智能体的保守性，减少对不确定状态的探索，使得智能体对当前状态的估计可以更加稳健。
+
+\subsection{具体实现}
+\subsubsection{累积不确定性度量}
+在实际情况中，由于环境状态往往是连续的，难以维护出对每个状态的不确定性估计。因此，本文引入一个额外的神经网络来学习状态到累积不确定性的度量$u(s')$。在智能体与环境模型交互的过程中，当智能体从环境模型$\hat{T}_{\theta}(\cdot)$中获取新的状态$s'$时，在经验回放池中同时记录所对应的状态不确定性，并在模型训练过程中，从经验回放池中进行批次数据抽样，训练回归模型来预测对不同状态的不确定性度量。
+
+\subsubsection{模型训练}
+在模型训练中，本文采用一个3层的全连接神经网络$\hat{T}_{\theta}(s', r | s, a)$作为环境模型，该模型的输入为当前的状态$s$与动作$a$，输出为一个高斯分布的均值与方差：$\mathcal{N}\left( \mu_{\theta}(s, a), \Sigma_{\theta}(s, a) \right)$。同时使用另一个由两层全连接神经网络构成的$u_{\phi}(s_t)$来预测状态的累积不确定性。
+
+本文提出的算法命名为AOPO(Adaptive Offline Policy Optimization)，其算法流程分为两个阶段：阶段1中，通过行为策略从在线环境中获取离线数据集，然后基于离线数据集训练环境模型$\hat{T}_{\theta}(\cdot)$；阶段2中，基于环境模型的抽样数据，同时训练策略模型和状态不确定性模型。
+
+\subsubsection{算法描述}
+算法1为AOPO的具体细节。根据算法的描述，算法的输入为离线数据集$D_{env}$，输出为智能体的策略$\pi(a | s)$。首先初始化神经网络的参数和超参数，接下来基于$D_{env}$的数据对环境模型进行更新优化；当训练到合适的环境模型之后，与环境模型进行交互，并获得新的经验回放池与不确定性估计；最后，通过SAC算法更新优化策略$\pi$。
+
+\noindent \textbf{算法1 基于自适应不确定性度量的离线强化学习算法(AOPO)} \\
+\textbf{输入}: 离线数据集 $D_{env} = \{(s_{i}, a_{i}, r_{i}, s_{i}')\}$ \\
+\textbf{输出}: 智能体策略 $\pi(a | s)$ \\
+1: 随机初始化神经网络的参数；\\
+2: 初始化超参数$\lambda,\omega,\alpha,K_0$；\\
+3: \textbf{WHILE} 未收敛 \textbf{DO} \\
+4: \quad \% 构建环境模型 \\
+5: \quad 从 $D_{env}$ 中抽样数据 $(s, a, s', r)$；\\
+6: \quad 更新环境模型:$\theta \leftarrow \theta - \beta \nabla_{\theta}L_T$；\\
+7: \quad \% 策略优化 \\
+8: \quad \textbf{FOR} 轮次$k= 1$ \textbf{to} $K$ \textbf{DO} \\
+9: \quad \quad 从 $D_{env}$ 中抽样初始状态 $s$；\\
+10: \quad \quad \textbf{FOR} $t=0$ \textbf{to} $t_{max}$ \textbf{DO} \\
+11: \quad \quad \quad 抽样动作 $a \sim \pi(s)$；\\
+12: \quad \quad \quad 根据环境模型得到$s',r,\Sigma_{\theta}(s, a) \sim \hat{T}_{\theta}(s, a)$；\\
+13: \quad \quad \quad 根据不确定性模型预测状态不确定性:$u_{\phi}(s')$；\\
+14: \quad \quad \quad 根据式(3)更新当前状态的不确定性:$u_{\phi}(s)$；\\
+15: \quad \quad \quad 根据式(4)更新奖赏函数；\\
+16: \quad \quad \quad 将样本$(s,a,s',r,u_{\phi}(s))$加入经验回放池 $D_{model}$；\\
+17: \quad \quad 根据经验回放池 $D_{env} \cup D_{model}$ 通过SAC算法优化策略 $\pi$；\\
+18: \quad \textbf{END FOR} \\
+19: \textbf{END WHILE}
+
+\section{实验}
+通过多个实验对AOPO进行评价，利用多个MuJuCo任务中获取的D4RL$^{[17]}$标准数据集进行测试，并尝试回答以下问题：
+\begin{enumerate}
+  \item 相较于其他基准算法，AOPO是否可以在测试环境中取得更好的性能？
+  \item 累积状态不确定性的度量，是否可以准确评估不同状态的不确定性？
+  \item 自适应动态调整的不确定性权重，是否能够促进智能体对策略的优化？
+\end{enumerate}
+
+\subsection{实验设置}
+\subsubsection{数据收集}
+本次实验在公开的D4RL基准数据集上运行。该数据集是从多个MuJoCo任务中收集得到，本文使用了其中的$v2$版本，对每一个任务包含了以下3类的数据集：
+\begin{enumerate}
+  \item 随机：在相应的任务中通过随机策略执行1M步，并收集相关经验数据；
+  \item 中等：训练一个性能中等的策略(性能约相当于专家策略的1/3)，并通过该中等性能的策略执行1M步，收集相关经验数据；
+  \item 专家：专家经验数据和中等策略数据的混合数据集合。
+\end{enumerate}
+
+\subsubsection{参数设置}
+在本文的算法中，主要设置以下的一些超参数：在环境模型中探索的步数$t_{max}=5$；$\lambda_0$设置为0.5；$\omega$固定为0.5，更早状态的不确定性占的权重更低；$\alpha$设置为0.5，从而能够在状态不确定性和转移不确定性之间取得平衡；$K_0$设置为10000，即在初始阶段，鼓励智能体更多地去探索未知的环境。
+
+\subsubsection{基准算法}
+在实验中，主要将AOPO算法和以下两类算法进行对比：
+\begin{enumerate}
+  \item 免模型离线强化学习：BC(行为克隆)；CQL(保守估计Q函数)；IQL(基于隐形约束的Q函数)；
+  \item 有模型离线强化学习：MOPO(通过方差来估计环境转移不确定性)。
+\end{enumerate}
+
+\subsection{在D4RL数据集上的实验}
+首先在标准的D4RL数据集上对不同算法的累积收益进行评估，结果如表1所示。在9个实验中，本文提出的AOPO在其中6个数据集中都取得了最好的效果，验证了本文算法的有效性。相较于其他的有模型方法MOPO，AOPO在7个数据集上都取得了更好的效果。尤其是在数据集质量不太好的情况下，AOPO可以获得更好的指标，这是由于质量较低的数据集，对环境状态的不确定性估计更为重要，因此自适应的不确定性估计可以更好地取得较高的性能。
+
+相较于BC、CQL、IQL等免模型离线强化学习算法，AOPO也可以在6个数据集中取得最好的效果。在专家类数据集上，免模型的算法更容易取得较好的结果，这是因为免模型方法如BC，可以更直接地去模仿数据集中的策略，因此也更容易模仿到性能较高的策略。
+
+\begin{table}[htbp]
+  \centering
+  \caption{AOPO与其他基准算法在D4RL的9个数据集上的实验结果}
+  \small
+  \begin{tabular}{l l c c c c c}
+    \toprule
+    数据集 & 环境          & AOPO          & MOPO  & BC    & CQL   & IQL   \\
+    \midrule
+    随机  & halfcheetah & 37.2$\pm$3.5  & 35.4  & 2.1   & 19.6  & -     \\
+    随机  & hopper      & 17.6$\pm$2.2  & 11.7  & 9.8   & 6.7   & -     \\
+    随机  & walker2d    & 15.4$\pm$5.1  & 13.6  & 1.6   & 2.4   & -     \\
+    中等  & halfcheetah & 50.3$\pm$2.5  & 42.3  & 36.1  & 49.0  & 47.4  \\
+    中等  & hopper      & 72.4$\pm$4.8  & 28.0  & 29.0  & 66.6  & 66.3  \\
+    中等  & walker2d    & 74.5$\pm$5.4  & 17.8  & 6.6   & 83.8  & 78.3  \\
+    专家  & halfcheetah & 93.7$\pm$4.2  & 53.3  & 35.8  & 90.8  & 86.7  \\
+    专家  & hopper      & 104.5$\pm$6.2 & 108.7 & 111.9 & 106.8 & 91.5  \\
+    专家  & walker2d    & 82.4$\pm$4.5  & 95.6  & 6.4   & 109.4 & 109.6 \\
+    \bottomrule
+  \end{tabular}
+  \label{tab1}
+\end{table}
+
+\subsection{累积不确定性的度量}
+本实验主要用于评价AOPO算法是否可以准确地估计不同状态的不确定性。在AOPO中，通过训练监督学习模型$u_{\phi}(\cdot)$可以用于评估不同状态的不确定性。为了验证该模型的有效性，向模型输入数据集中已有状态数据，因为这些状态是从真实环境收集的，所以其不确定性也比较低。
+
+图3为智能体探索过程中不同步数的状态不确定性的箱图，对不同的步数分别从离线数据集($t=0$)和经验回放池($t \geq1$)抽取1000个状态，并采用$u_{\phi}(\cdot)$来评估状态的不确定性。从图中可以看出，当$t=0$时，由于此时状态都直接从离线数据集中获取，该部分数据并没有经过模型的训练，因此较低的不确定性也验证了该模型的有效性；随着步数$t$的增加，状态的不确定性的均值也在逐渐增大。
+
+\begin{figure}[htbp]
+  \centering
+  \caption{AOPO算法的不确定性评估}
+  \includegraphics[width=0.6\textwidth]{fig3.pdf} % 仅为占位，保留图片描述
+  \说明：横轴为智能体探索步数，纵轴为状态不确定性值；t=0为离线数据集状态，t≥1为经验回放池状态，不确定性随步数增加呈上升趋势。
+  \label{fig3}
+\end{figure}
+
+\subsection{消融实验}
+在该实验中，分别测试以下几种设置的实验性能：AOPO算法；只考虑状态不确定性估计的AOPO算法(AOPO-state)；只考虑自适应不确定性系数的AOPO算法(AOPO-adaptive)；未考虑状态不确定性和自适应系数的AOPO算法，即MOPO算法。表2为不同算法的累积收益结果。
+
+从表2可以看出，在绝大多数情况下，AOPO取得了最好的效果，验证了同时考虑状态不确定性和自适应系数的有效性。在少数情况下，AOPO-state或AOPO-adaptive可以取得更好的效果，这是因为在中等或者专家数据集中，由于数据的质量较好，对不确定性估计的准确率要求也较低，因此MOPO也有可能取得最优的效果。
+
+\begin{table}[htbp]
+  \centering
+  \caption{消融实验结果}
+  \small
+  \begin{tabular}{l l c c c c}
+    \toprule
+    数据集 & 环境          & AOPO          & MOPO  & AOPO-state & AOPO-adaptive \\
+    \midrule
+    随机  & halfcheetah & 37.2$\pm$3.5  & 35.7  & 34.2       & 35.4          \\
+    随机  & hopper      & 17.6$\pm$2.2  & 14.3  & 14.6       & 11.7          \\
+    随机  & walker2d    & 15.4$\pm$5.1  & 12.5  & 13.7       & 13.6          \\
+    中等  & halfcheetah & 50.3$\pm$2.5  & 44.5  & 43.1       & 42.3          \\
+    中等  & hopper      & 72.4$\pm$4.8  & 73.5  & 43.6       & 28.0          \\
+    中等  & walker2d    & 74.5$\pm$5.4  & 25.7  & 53.3       & 17.8          \\
+    专家  & halfcheetah & 93.7$\pm$4.2  & 44.7  & 76.5       & 53.3          \\
+    专家  & hopper      & 104.5$\pm$6.2 & 102.4 & 106.8      & 108.7         \\
+    专家  & walker2d    & 82.4$\pm$4.5  & 92.4  & 99.6       & 95.6          \\
+    \bottomrule
+  \end{tabular}
+  \label{tab2}
+\end{table}
+
+\section{结束语}
+研究了一种基于自适应不确定性度量的离线强化学习，其目的在于从离线数据集直接优化出可以在真实环境中部署的强化学习策略。为了达到以上目的，首先提出对状态不确定性的度量方法，并利用监督学习来优化此种指标；其次，提出了自适应动态的不确定性系数，可以在训练开始时鼓励智能体更多地去探索，而在策略逐渐稳定之后，减少智能体的探索强度。
+
+多个实验结果表明，提出的算法可以在大多数数据集中取得更好的效果。在未来工作中，将继续深入分析离线强化学习中不确定性的发生机制，并通过因果推断等方法分析不确定性的理论保证。
+
+% 参考文献
+\begin{thebibliography}{17}
+  \bibitem{1} 刘全, 翟建伟, 章宗长, 等. 深度强化学习综述[J]. 计算机学报, 2018, 41(1):1-27.
+  \bibitem{2} SILVER D, SCHRITTWIESER J, SIMONYAN K, et al. Mastering the game of go without human knowledge[J]. Nature, 2017, 550(7676):354-359.
+  \bibitem{3} MNIH V, KAVUKCUOGLU K, SILVER D, et al. Human level control through deep reinforcement learning[J]. Nature, 2015, 518:529-533.
+  \bibitem{4} JOHANNINK T, BAHL S, NAIR A, et al. Residual reinforcement learning for robot control[C]∥International Conference on Robotics and Automation (ICRA). 2019:6023-6029.
+  \bibitem{5} AGARWAL R, SCHUURMANS D, NOROUZI M. An optimistic perspective on offline reinforcement learning[C]∥Proceedings of the 37th International Conference on Machine Learning. 2020:104-114.
+  \bibitem{6} TORABI F, WARNELL G, STONE P. Behavioral cloning from observation[C]∥Proceedings of the 27th International Joint Conference on Artificial Intelligence. 2018:4950-4957.
+  \bibitem{7} KUMAR A, ZHOU A, TUCKER G, et al. Conservative Q-learning for offline reinforcement learning[C]∥Proceedings of the 34th International Conference on Neural Information Processing Systems. 2020:1179-1191.
+  \bibitem{8} KOSTRIKOV I, NAIR A, LEVINE S. Offline reinforcement learning with implicit Q-learning[EB/OL]. [2023-07-20]. http://arxiv.org/abs/2110.06169.
+  \bibitem{9} YANG R, BAI C J, MA X T, et al. RORL: robust offline reinforcement learning via conservative smoothing[EB/OL]. [2023-07-20]. http://arxiv.org/abs/2206.02829.
+  \bibitem{10} YU T H, THOMAS G, YU L T, et al. MOPO: model based offline policy optimization[EB/OL]. [2023-07-20]. http://arxiv.org/abs/2005.13239.
+  \bibitem{11} KIDAMBI R, RAJESWARAN A, NETRAPALLI P, et al. MOReL: model-based offline reinforcement learning[EB/OL]. [2023-07-20]. http://arxiv.org/abs/2005.05951.
+  \bibitem{12} YANG J M, CHEN X G, WANG S Y, et al. Model based offline policy optimization with adversarial network[C]∥26th European Conference on Artificial Intelligence (ECAI). 2023:2850-2857.
+  \bibitem{13} WANG X, CHEN H N, YANG J M, et al. SDV: simple double validation model-based offline reinforcement learning[C]∥26th European Conference on Artificial Intelligence (ECAI). 2023:2556-2574.
+  \bibitem{14} RIGTER M, LACERDA B, HAWES N. RAMBO-RL: robust adversarial model-based offline reinforcement learning[EB/OL]. [2023-07-20]. http://arxiv.org/abs/2204.12581.
+  \bibitem{15} SUTTON R S, BARTO A G. Reinforcement learning: an introduction[J]. IEEE Transactions on Neural Networks, 1998, 9(5):1054.
+  \bibitem{16} HAARNOJA T, ZHOU A, ABBEEL P, et al. Soft actor critic: off-policy maximum entropy deep reinforcement learning with a stochastic actor[C]∥35th International Conference on Machine Learning (ICML). 2018:1861-1870.
+  \bibitem{17} FU J, KUMAR A, NACHUM O, et al. D4RL: datasets for deep data-driven reinforcement learning[EB/OL]. [2023-07-20]. http://arxiv.org/abs/2004.07219.
+\end{thebibliography}
+
+\noindent \textbf{责任编辑}:寇笑笑
+
+\end{document}
