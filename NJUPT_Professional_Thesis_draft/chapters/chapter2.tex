@@ -1,6 +1,6 @@
 \chapter{理论基础与相关工作}\label{Chap:chap2}
 
-本章首先介绍强化学习的理论基础，建立本文所需的数学框架，包括马尔可夫决策过程、基于模型的离线强化学习框架、集成模型与不确定性估计等核心概念；随后对离线强化学习、离线到在线强化学习领域的相关工作进行系统综述，分析现有方法的发展脉络、核心优势与局限，阐明本文研究动机。
+本章首先介绍强化学习的理论基础，建立本文所需的数学框架，包括马尔可夫决策过程、基于模型的离线强化学习框架、集成模型与不确定性估计、Soft Actor-Critic算法等核心概念；随后对离线强化学习、离线到在线强化学习领域的相关工作进行系统综述，分析现有方法的发展脉络、核心优势与局限，阐明本文研究动机。
 
 
 \section{理论基础}\label{Sec2.1}
@@ -92,6 +92,53 @@
 \end{equation}
 
 其中$d$为预测向量的维度，$\mu_{\phi,j}^i(s,a)$表示第$i$个模型预测均值的第$j$个分量，$\text{Var}_{i=1,\ldots,N}[\cdot]$表示在$N$个集成成员间计算方差。该度量的核心思想是：在数据充分覆盖的区域，各模型收敛至相近的预测，分歧度较低；在数据稀疏的区域，模型因初始化差异而产生显著不同的预测，分歧度较高。本文将在算法设计中融合两类不确定性信息，实现更高效的策略优化与在线探索。
+
+
+\subsection{Soft Actor-Critic算法}\label{Sec2.1.4}
+
+Soft Actor-Critic（SAC）\cite{Haarnoja2018SAC}是一种基于最大熵框架的Actor-Critic算法，在连续控制任务中表现优异，是本文后续章节策略优化的基础算法。SAC的核心思想是在最大化期望回报的同时最大化策略的熵，从而鼓励探索并提升策略的鲁棒性。
+
+SAC的优化目标定义为带熵正则的期望回报：
+\begin{equation}\label{Eq:Chap2_sac_objective}
+  J(\pi) = \sum_{t=0}^{\infty} \mathbb{E}_{(s_t, a_t) \sim \rho_\pi}\left[r(s_t, a_t) + \alpha_{ent} \mathcal{H}(\pi(\cdot|s_t))\right]
+\end{equation}
+
+其中$\mathcal{H}(\pi(\cdot|s)) = -\mathbb{E}_{a \sim \pi}[\log \pi(a|s)]$为策略在状态$s$下的熵，$\alpha_{ent} > 0$为温度参数，控制熵正则项的相对重要性。熵正则项的引入使策略倾向于在高价值动作之间保持一定的随机性，避免过早收敛到确定性策略，有助于在训练过程中保持探索能力。
+
+SAC采用Actor-Critic架构，包含三个核心组件：策略网络（Actor）$\pi_\varphi$、双Q值网络（Critic）$Q_{\theta_1}, Q_{\theta_2}$和目标Q值网络$Q_{\bar{\theta}_1}, Q_{\bar{\theta}_2}$。
+
+Q值网络通过最小化软贝尔曼残差进行训练：
+\begin{equation}\label{Eq:Chap2_sac_critic}
+  \mathcal{L}(\theta_i) = \mathbb{E}_{(s, a, r, s') \sim \mathcal{D}}\left[\left(Q_{\theta_i}(s, a) - y\right)^2\right], \quad i = 1, 2
+\end{equation}
+
+其中目标值$y$定义为：
+\begin{equation}\label{Eq:Chap2_sac_target}
+  y = r + \gamma \left(\min_{j=1,2} Q_{\bar{\theta}_j}(s', a') - \alpha_{ent} \log \pi_\varphi(a'|s')\right), \quad a' \sim \pi_\varphi(\cdot|s')
+\end{equation}
+
+采用双Q网络的最小值可以有效抑制Q值的过估计问题\cite{Hasselt2016DoubleDQN}。目标网络通过软更新$\bar{\theta} \leftarrow \tau \theta + (1 - \tau) \bar{\theta}$与主网络保持同步，其中$\tau \ll 1$为软更新系数，确保训练过程的稳定性。
+
+策略网络通过最大化以下目标进行优化：
+\begin{equation}\label{Eq:Chap2_sac_actor}
+  J(\varphi) = \mathbb{E}_{s \sim \mathcal{D}, a \sim \pi_\varphi}\left[\min_{j=1,2} Q_{\theta_j}(s, a) - \alpha_{ent} \log \pi_\varphi(a|s)\right]
+\end{equation}
+
+该目标同时考虑动作价值和策略熵：第一项驱动策略选择高价值动作，第二项鼓励策略保持多样性。对于连续动作空间，策略网络通常输出高斯分布的均值和方差，通过重参数化技巧\cite{Kingma2014VAE}实现可微采样：
+\begin{equation}\label{Eq:Chap2_reparameterization}
+  a = \tanh(\mu_\varphi(s) + \sigma_\varphi(s) \odot \epsilon), \quad \epsilon \sim \mathcal{N}(0, I)
+\end{equation}
+
+其中$\tanh$函数将动作限制在有界区间内，$\odot$表示逐元素乘法。
+
+温度参数$\alpha_{ent}$可通过自动调节机制学习\cite{Haarnoja2018SAC}，使熵保持在目标水平附近：
+\begin{equation}\label{Eq:Chap2_alpha_loss}
+  \mathcal{L}(\alpha_{ent}) = \mathbb{E}_{a \sim \pi_\varphi}\left[-\alpha_{ent} \left(\log \pi_\varphi(a|s) + \bar{\mathcal{H}}\right)\right]
+\end{equation}
+
+其中$\bar{\mathcal{H}}$为目标熵，通常设为$-\dim(\mathcal{A})$。当策略熵低于目标熵时，$\alpha_{ent}$增大以鼓励探索；当策略熵高于目标熵时，$\alpha_{ent}$减小以促进收敛。
+
+SAC在离线强化学习中的应用需要特别注意分布偏移问题：由于无法与环境交互获取反馈，Q值网络对分布外动作的估计可能产生严重的过估计。本文后续章节通过不确定性惩罚机制约束策略在模型预测可靠的区域内优化，有效缓解这一问题。
 
 
 \section{相关工作}\label{Sec2.2}
