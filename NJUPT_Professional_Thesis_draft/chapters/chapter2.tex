@@ -28,12 +28,12 @@
 
 状态价值函数与动作价值函数之间存在如下关系：
 \begin{equation}\label{Eq:Chap2_v_q_relation}
-  V_M^\pi(s) = \mathbb{E}_{a \sim \pi(\cdot|s)}[Q_M^\pi(s,a)] = \sum_{a \in \mathcal{A}} \pi(a|s) Q_M^\pi(s,a)
+  V_M^\pi(s) = \mathbb{E}_{a \sim \pi(\cdot|s)}[Q_M^\pi(s,a)] = \sum_{a \in \mathcal{A}} \pi(a|s) Q_M^\pi(s,a),
 \end{equation}
 
 即状态价值等于该状态下所有动作价值在策略分布下的期望。反之，动作价值函数可通过贝尔曼期望方程表示为：
 \begin{equation}\label{Eq:Chap2_bellman}
-  Q_M^\pi(s,a) = r(s,a) + \gamma \mathbb{E}_{s' \sim T(\cdot|s,a)}[V_M^\pi(s')]
+  Q_M^\pi(s,a) = r(s,a) + \gamma \mathbb{E}_{s' \sim T(\cdot|s,a)}[V_M^\pi(s')],
 \end{equation}
 
 即当前奖励与后继状态价值折扣期望之和。
