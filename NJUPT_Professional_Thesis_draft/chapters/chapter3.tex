@@ -34,23 +34,20 @@
 
 转移模型采用高斯分布进行建模：
 \begin{equation}\label{Eq:Chap3_transition_model}
-  \hat{T}_\theta(s', r|s, a) = \mathcal{N}\left(\mu_\theta(s, a), \Sigma_\theta(s, a)\right)
+  \hat{T}_\theta(s', r|s, a) = \mathcal{N}\left(\mu_\theta(s, a), \Sigma_\theta(s, a)\right),
 \end{equation}
-
 其中$\mu_\theta(s, a) \in \mathbb{R}^{d_s + 1}$为预测均值向量（包含下一状态和奖励），$\Sigma_\theta(s, a) \in \mathbb{R}^{(d_s+1) \times (d_s+1)}$为预测协方差矩阵，$d_s$为状态空间维度。为简化计算，本文采用对角协方差矩阵。
 
 模型网络采用多层感知机结构，包含3个隐藏层，每层256个神经元，使用ReLU激活函数。输出层分为两个分支：均值分支直接输出预测均值，方差分支输出对数方差$\log\sigma^2$，通过指数变换得到正定的方差估计，保证数值稳定性。
 
 模型参数通过最大化离线数据的对数似然进行优化，训练损失定义为：
 \begin{equation}\label{Eq:Chap3_model_loss}
-  \mathcal{L}(\theta) = -\mathbb{E}_{(s, a, r, s') \sim \mathcal{D}_{off}}\left[\log \hat{T}_\theta(s', r|s, a)\right]
+  \mathcal{L}(\theta) = -\mathbb{E}_{(s, a, r, s') \sim \mathcal{D}_{off}}\left[\log \hat{T}_\theta(s', r|s, a)\right],
 \end{equation}
-
 展开高斯分布的对数似然，训练损失可写为：
 \begin{equation}\label{Eq:Chap3_model_loss_expand}
-  \mathcal{L}(\theta) = \mathbb{E}_{(s, a, r, s') \sim \mathcal{D}_{off}}\left[\frac{1}{2}(y - \mu_\theta)^T \Sigma_\theta^{-1} (y - \mu_\theta) + \frac{1}{2}\log|\Sigma_\theta|\right]
+  \mathcal{L}(\theta) = \mathbb{E}_{(s, a, r, s') \sim \mathcal{D}_{off}}\left[\frac{1}{2}(y - \mu_\theta)^T \Sigma_\theta^{-1} (y - \mu_\theta) + \frac{1}{2}\log|\Sigma_\theta|\right],
 \end{equation}
-
 其中$y = [s'; r]$为真实的下一状态和奖励拼接向量。该损失函数同时优化预测均值和预测方差：均值项最小化预测误差，方差项约束模型输出合理的不确定性估计。
 
 
@@ -58,16 +55,14 @@
 
 完成转移模型训练后，策略优化阶段利用转移模型生成虚拟轨迹，并基于不确定性惩罚进行策略更新。与MOPO\cite{Yu2020MOPO}类似，本文定义状态转移不确定性为模型预测方差的范数：
 \begin{equation}\label{Eq:Chap3_transition_uncertainty}
-  u_{trans}(s, a) = \|\Sigma_\theta(s, a)\|_F
+  u_{trans}(s, a) = \|\Sigma_\theta(s, a)\|_F,
 \end{equation}
-
 其中$\|\cdot\|_F$表示Frobenius范数。该度量反映了模型对状态转移预测的置信程度：在数据覆盖充分的区域，模型预测方差较小；在数据稀疏的分布外区域，模型预测方差较大。
 
 策略优化采用Soft Actor-Critic（SAC）\cite{Haarnoja2018SAC}算法框架。SAC维护策略网络$\pi_\varphi$和两个Q值网络$Q_{\theta_1}, Q_{\theta_2}$，通过最大化带熵正则的期望回报优化策略：
 \begin{equation}\label{Eq:Chap3_sac_objective}
-  J(\varphi) = \mathbb{E}_{s \sim \mathcal{D}, a \sim \pi_\varphi}[Q_\theta(s, a) - \alpha_{ent} \log \pi_\varphi(a|s)]
+  J(\varphi) = \mathbb{E}_{s \sim \mathcal{D}, a \sim \pi_\varphi}[Q_\theta(s, a) - \alpha_{ent} \log \pi_\varphi(a|s)],
 \end{equation}
-
 其中$\alpha_{ent}$为温度参数，控制探索与利用的平衡。训练数据从离线数据集$\mathcal{D}_{off}$和模型生成数据集$\mathcal{D}_{model}$中按比例采样。模型生成数据通过从离线数据集中采样初始状态，利用当前策略与转移模型交互生成短期轨迹获得。
 
 
@@ -82,16 +77,14 @@
 
 定义状态$s_t$的累积不确定性为：
 \begin{equation}\label{Eq:Chap3_cumulative_uncertainty}
-  u(s_t) = \mathbb{E}\left[\sum_{t'=0}^{t} \omega^{t-t'} \log\left(\Sigma_\theta(s_{t'}, a_{t'}) + 1\right)\right]
+  u(s_t) = \mathbb{E}\left[\sum_{t'=0}^{t} \omega^{t-t'} \log\left(\Sigma_\theta(s_{t'}, a_{t'}) + 1\right)\right],
 \end{equation}
-
 其中$\omega \in (0, 1]$为折扣因子。该定义的核心思想是：状态$s_t$的不确定性由从初始状态到当前状态的所有状态转移不确定性的折扣和构成。引入折扣因子$\omega$的原因在于：（1）从不同的初始状态都有可能到达$s_t$，因此应给时序上更近的状态赋予更高的权重；（2）早期状态转移的不确定性对当前状态的影响随时间递减。取对数是为了使不确定性度量更加平滑，避免数值不稳定。
 
 基于上述定义，累积状态不确定性可通过递推方式进行高效更新：
 \begin{equation}\label{Eq:Chap3_uncertainty_update}
-  u(s') = \omega \cdot u(s) + \log\left(\Sigma_\theta(s, a) + 1\right)
+  u(s') = \omega \cdot u(s) + \log\left(\Sigma_\theta(s, a) + 1\right),
 \end{equation}
-
 其中$s'$为从状态$s$执行动作$a$后转移到的下一状态。该递推公式表明：下一状态的累积不确定性由当前状态的累积不确定性（经折扣后）与当前状态转移的不确定性之和构成。相比重新计算完整历史，递推更新的时间复杂度为$O(1)$，适合在线应用。
 
 
@@ -103,7 +96,7 @@
 
 网络的训练采用监督学习方式。在智能体与环境模型交互生成虚拟轨迹的过程中，对每个访问的状态$s$，根据公式(\ref{Eq:Chap3_uncertainty_update})计算其累积不确定性$u(s)$，并将$(s, u(s))$对存入经验回放池$\mathcal{D}_{model}$。在训练过程中，从经验回放池中采样批次数据，通过最小化均方误差损失优化网络参数：
 \begin{equation}\label{Eq:Chap3_uncertainty_loss}
-  \mathcal{L}(\phi) = \mathbb{E}_{(s, u(s)) \sim \mathcal{D}_{model}}\left[\left(u_\phi(s) - u(s)\right)^2\right]
+  \mathcal{L}(\phi) = \mathbb{E}_{(s, u(s)) \sim \mathcal{D}_{model}}\left[\left(u_\phi(s) - u(s)\right)^2\right].
 \end{equation}
 
 通过该网络，智能体可以快速评估任意状态的累积不确定性，无需在线计算完整的历史轨迹。在推理时，网络的前向传播复杂度为$O(d_\phi)$，其中$d_\phi$为网络参数量，相比存储和查询完整历史显著降低了计算开销。
@@ -113,9 +106,8 @@
 
 基于累积状态不确定性和状态转移不确定性，本文提出综合的奖励重塑机制。当智能体处于状态$s$并执行动作$a$时，通过环境模型获取下一状态$s'$和奖励$r$，同时获取状态转移不确定性$\Sigma_\theta(s, a)$和下一状态的累积不确定性$u_\phi(s')$。重塑后的奖励定义为：
 \begin{equation}\label{Eq:Chap3_reward_shaping}
-  \tilde{r} = r - \lambda \cdot \left(\alpha \cdot u_\phi(s') + \Sigma_\theta(s, a)\right)
+  \tilde{r} = r - \lambda \cdot \left(\alpha \cdot u_\phi(s') + \Sigma_\theta(s, a)\right),
 \end{equation}
-
 其中$\lambda$为不确定性惩罚的总体权重，$\alpha$为平衡状态不确定性与转移不确定性的超参数。该奖励重塑机制具有以下优势：
 
 第一，综合考虑了状态不确定性和转移不确定性。不仅惩罚高不确定性的状态转移，还惩罚进入高不确定性状态的行为，使智能体能够更全面地规避分布外区域。
@@ -145,16 +137,15 @@
 
 定义自适应动态权重系数为：
 \begin{equation}\label{Eq:Chap3_adaptive_weight}
-  \lambda_k = \frac{\lambda_0}{1 + e^{K_0 - k}}
+  \lambda_k = \frac{\lambda_0}{1 + e^{K_0 - k}},
 \end{equation}
-
 其中$k$为当前训练的轮次数，$K_0$为预定义的转折点超参数，$\lambda_0$为基础惩罚系数。该权重系数遵循Sigmoid函数的曲线特性，具有以下性质：
 
-第一，当$k \ll K_0$时，$\lambda_k \approx \lambda_0 \cdot e^{k - K_0} \approx 0$，惩罚权重接近于零。此时智能体倾向于充分探索环境模型中的各个状态，不确定性惩罚几乎不起作用。
+当$k \ll K_0$时，$\lambda_k \approx \lambda_0 \cdot e^{k - K_0} \approx 0$，惩罚权重接近于零。此时智能体倾向于充分探索环境模型中的各个状态，不确定性惩罚几乎不起作用。
 
-第二，当$k \gg K_0$时，$\lambda_k \approx \lambda_0$，惩罚权重达到完整值。此时智能体变得保守，强不确定性区域受到显著惩罚，策略被约束在模型预测可靠的区域内。
+当$k \gg K_0$时，$\lambda_k \approx \lambda_0$，惩罚权重达到完整值。此时智能体变得保守，强不确定性区域受到显著惩罚，策略被约束在模型预测可靠的区域内。
 
-第三，当$k = K_0$时，$\lambda_k = \lambda_0 / 2$，惩罚权重处于中间水平。这标志着从探索主导向保守主导的过渡点，Sigmoid函数确保这一过渡是平滑连续的，避免策略优化过程中的剧烈波动。
+当$k = K_0$时，$\lambda_k = \lambda_0 / 2$，惩罚权重处于中间水平。这标志着从探索主导向保守主导的过渡点，Sigmoid函数确保这一过渡是平滑连续的，避免策略优化过程中的剧烈波动。
 
 该设计的核心优势在于：使用Sigmoid函数确保权重从低到高的变化是连续平滑的；通过调整$K_0$可以控制从探索到保守的过渡时机，适应不同任务的训练需求；仅引入一个额外的超参数$K_0$，增加的计算开销可忽略不计。
 
@@ -169,7 +160,7 @@
 \begin{prop}[累积不确定性的单调性]\label{Prop:Chap3_monotonicity}
   设$u(s_t)$为状态$s_t$的累积不确定性。若所有状态转移的不确定性非负，即$\forall s, a: \log(\Sigma_\theta(s, a) + 1) \geq 0$，则累积不确定性沿轨迹单调不减：
   \begin{equation}
-    u(s_{t+1}) \geq \omega \cdot u(s_t), \quad \forall t \geq 0
+    u(s_{t+1}) \geq \omega \cdot u(s_t), \quad \forall t \geq 0.
   \end{equation}
 \end{prop}
 
@@ -182,7 +173,7 @@
 \begin{prop}[不确定性预测的泛化性]\label{Prop:Chap3_generalization}
   设不确定性预测网络$u_\phi(s)$具有Lipschitz连续性，即存在常数$L > 0$使得$|u_\phi(s_1) - u_\phi(s_2)| \leq L \cdot \|s_1 - s_2\|$。若网络在经验回放池$\mathcal{D}_{model}$上达到$\epsilon$-最优，即$\mathbb{E}_{s \sim \mathcal{D}_{model}}[(u_\phi(s) - u(s))^2] \leq \epsilon$，则对于$\mathcal{D}_{model}$中状态的$\delta$-邻域内的新状态$s'$，预测误差满足：
   \begin{equation}
-    |u_\phi(s') - u(s')| \leq \sqrt{\epsilon} + L \cdot \delta + \Delta_u
+    |u_\phi(s') - u(s')| \leq \sqrt{\epsilon} + L \cdot \delta + \Delta_u,
   \end{equation}
   其中$\Delta_u$为真实不确定性函数在$\delta$-邻域内的最大变化量。
 \end{prop}
@@ -195,7 +186,7 @@
 \begin{thm}[自适应权重的平衡性]\label{Thm:Chap3_balance}
   设$\mathcal{R}_{explore}(k)$为轮次$k$时基于探索策略的期望收益，$\mathcal{R}_{conserve}(k)$为基于保守策略的期望收益。在自适应权重机制下，有效策略的期望收益可表示为两者的凸组合：
   \begin{equation}
-    \mathcal{R}(k) = \left(1 - \frac{\lambda_k}{\lambda_0}\right) \cdot \mathcal{R}_{explore}(k) + \frac{\lambda_k}{\lambda_0} \cdot \mathcal{R}_{conserve}(k)
+    \mathcal{R}(k) = \left(1 - \frac{\lambda_k}{\lambda_0}\right) \cdot \mathcal{R}_{explore}(k) + \frac{\lambda_k}{\lambda_0} \cdot \mathcal{R}_{conserve}(k),
   \end{equation}
   该组合权重随训练进程自动从探索主导过渡到保守主导。
 \end{thm}
@@ -209,7 +200,7 @@
 \begin{cor}[相比固定权重的优势]\label{Cor:Chap3_advantage}
   设$\mathcal{R}_{adaptive}$为自适应权重的累积收益，$\mathcal{R}_{fixed}$为固定权重$\lambda_{fixed}$的累积收益。若最优权重应随训练阶段变化，则存在适当的$K_0$使得：
   \begin{equation}
-    \mathcal{R}_{adaptive} \geq \mathcal{R}_{fixed}, \quad \forall \lambda_{fixed} \in (0, \lambda_0]
+    \mathcal{R}_{adaptive} \geq \mathcal{R}_{fixed}, \quad \forall \lambda_{fixed} \in (0, \lambda_0].
   \end{equation}
 \end{cor}
 
@@ -375,4 +366,4 @@
 
 在实验验证层面，本章在D4RL MuJoCo基准的9个任务上进行了系统评估。主实验结果表明，本文方法在6个任务上取得最优或接近最优性能，特别是在数据质量较差的随机数据集上相比MOPO取得了显著提升，在hopper-medium任务上提升幅度达44.4个百分点。累积不确定性度量的有效性验证实验表明，不确定性预测网络能够准确区分分布内外状态，累积不确定性随推演步数单调增加。消融实验验证了累积状态不确定性和自适应权重机制的各自贡献及其协同效应。
 
-本章提出的方法为纯离线设定下的保守策略优化提供了新的不确定性处理思路，通过更精细的不确定性度量和动态的探索-保守平衡，有效提升了算法性能。然而，该方法仍然局限于纯离线设定，无法主动扩展离线数据的覆盖范围。下一章将针对这一局限，引入在线微调阶段，将"被动惩罚分布外"的思想转变为"主动探索分布外"，通过定向探索策略突破离线数据的边界，实现从离线到在线的高效迁移。
+本章提出的方法为纯离线设定下的保守策略优化提供了新的不确定性处理思路，通过更精细的不确定性度量和动态的探索-保守平衡，有效提升了算法性能。然而，该方法仍然局限于纯离线设定，无法主动扩展离线数据的覆盖范围。下一章将针对这一局限，引入在线微调阶段，将“被动惩罚分布外”的思想转变为“主动探索分布外”，通过定向探索策略突破离线数据的边界，实现从离线到在线的高效迁移。

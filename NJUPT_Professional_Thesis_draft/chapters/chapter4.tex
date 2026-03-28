@@ -1,6 +1,6 @@
 \chapter{基于定向探索模型的离线到在线强化学习算法}\label{Chap:chap4}
 
-本章详细介绍本文提出的基于定向探索模型的离线到在线强化学习算法。该算法在第三章纯离线方法的基础上进行扩展，将不确定性信息从"惩罚信号"转变为"探索引导信号"，通过引入在线微调阶段突破离线数据的覆盖边界。本章首先分析现有方法的局限性并阐明算法设计动机；随后系统阐述算法的整体框架，包括离线预训练阶段和在线定向探索阶段；接着深入讨论双重不确定性估计方法与动态权重自适应机制；然后给出算法的理论分析，证明定向探索策略相比均匀采样具有更优的收敛速率；最后通过在D4RL基准测试集上的实验验证算法的有效性。
+本章详细介绍本文提出的基于定向探索模型的离线到在线强化学习算法。该算法在第三章纯离线方法的基础上进行扩展，将不确定性信息从“惩罚信号”转变为“探索引导信号”，通过引入在线微调阶段突破离线数据的覆盖边界。本章首先分析现有方法的局限性并阐明算法设计动机；随后系统阐述算法的整体框架，包括离线预训练阶段和在线定向探索阶段；接着深入讨论双重不确定性估计方法与动态权重自适应机制；然后给出算法的理论分析，证明定向探索策略相比均匀采样具有更优的收敛速率；最后通过在D4RL基准测试集上的实验验证算法的有效性。
 
 
 \section{问题分析与算法动机}\label{Sec4.1}
@@ -11,11 +11,11 @@
 
 第一，保守性约束在在线阶段形成探索瓶颈。离线阶段学习的保守策略倾向于在低不确定性区域内采样。即使放松约束后，策略仍难以快速适应分布外区域，导致在线采集的样本集中在离线数据已覆盖的区域，对转移模型的改进贡献有限。这与第三章方法在离线设定下的保守性形成对比：在纯离线设定下，保守性是必要的安全保证；但在在线设定下，过度的保守性成为探索的障碍。
 
-第二，不确定性信息未得到充分利用。第三章的方法将不确定性用于惩罚高不确定性区域，这在离线设定下是合理的——避免策略访问模型预测不可靠的区域。然而，在在线设定下，高不确定性区域恰恰对应模型泛化能力不足、最需要补充数据的区域。将不确定性从"风险信号"转变为"机遇信号"，主动引导策略探索高不确定性区域，可显著提升在线交互的信息增益。
+第二，不确定性信息未得到充分利用。第三章的方法将不确定性用于惩罚高不确定性区域，这在离线设定下是合理的——避免策略访问模型预测不可靠的区域。然而，在在线设定下，高不确定性区域恰恰对应模型泛化能力不足、最需要补充数据的区域。将不确定性从“风险信号”转变为“机遇信号”，主动引导策略探索高不确定性区域，可显著提升在线交互的信息增益。
 
 第三，在线交互成本高昂。多数离线到在线方法为无模型方法，需要大量在线交互（通常需要200k步）才能实现有效微调。在实际应用中，与真实环境的每次交互都可能产生成本或风险，因此如何以最少的在线交互实现高效微调具有重要意义。延续第三章基于模型的方法框架，通过模型生成数据减少对真实环境的访问需求，是降低在线成本的有效途径。
 
-基于上述分析，本章提出将不确定性信息从"惩罚信号"转变为"探索引导信号"的核心思想。当采集在线样本时，策略应被引导至高不确定性（转移模型覆盖之外）且高动作价值（接近目标）的区域。高不确定性区域的样本可有效补充转移模型的训练数据，提升模型在全状态-动作空间的泛化能力；高动作价值区域的样本则确保采集的数据对策略优化有直接贡献，避免探索无关区域造成的资源浪费。这种定向探索策略将在线交互的信息增益最大化，以最少的交互次数实现高效微调。
+基于上述分析，本章提出将不确定性信息从“惩罚信号”转变为“探索引导信号”的核心思想。当采集在线样本时，策略应被引导至高不确定性（转移模型覆盖之外）且高动作价值（接近目标）的区域。高不确定性区域的样本可有效补充转移模型的训练数据，提升模型在全状态-动作空间的泛化能力；高动作价值区域的样本则确保采集的数据对策略优化有直接贡献，避免探索无关区域造成的资源浪费。这种定向探索策略将在线交互的信息增益最大化，以最少的交互次数实现高效微调。
 
 
 \section{算法框架}\label{Sec4.2}
@@ -36,22 +36,22 @@
 
 集成转移模型由$N$个独立训练的概率神经网络组成，每个网络$\hat{T}_\phi^i$以状态-动作对$(s,a)$为输入，输出下一状态和奖励的联合高斯分布（与第三章公式\ref{Eq:Chap3_transition_model}形式一致）：
 \begin{equation}\label{Eq:Chap4_ensemble_model}
-  \hat{T}_\phi^i(s', r|s, a) = \mathcal{N}(\mu_\phi^i(s, a), \Sigma_\phi^i(s, a)), \quad i = 1, \ldots, N
+  \hat{T}_\phi^i(s', r|s, a) = \mathcal{N}(\mu_\phi^i(s, a), \Sigma_\phi^i(s, a)), \quad i = 1, \ldots, N.
 \end{equation}
 
 相比第三章采用单一模型，本章采用集成模型的优势在于：一方面，多模型的平均预测可降低单一模型的偏差；另一方面，模型间预测的分歧度可用于量化认知不确定性（详见第\ref{Sec4.3.1}节），为后续的定向探索提供依据。各模型采用相同的网络结构但不同的随机初始化，通过最大化离线数据的对数似然独立训练：
 \begin{equation}\label{Eq:Chap4_model_training}
-  \mathcal{L}(\phi^i) = -\mathbb{E}_{(s,a,s',r) \sim \mathcal{D}_{off}}[\log \hat{T}_\phi^i(s', r|s, a)]
+  \mathcal{L}(\phi^i) = -\mathbb{E}_{(s,a,s',r) \sim \mathcal{D}_{off}}[\log \hat{T}_\phi^i(s', r|s, a)].
 \end{equation}
 
 在策略优化方面，离线阶段采用基于不确定性惩罚的保守更新策略，遵循MOPO\cite{Yu2020MOPO}的框架。与第三章不同的是，本章直接使用集成模型预测方差的最大值作为不确定性度量，而非累积状态不确定性：
 \begin{equation}\label{Eq:Chap4_offline_uncertainty}
-  u_{off}(s, a) = \max_{i=1,\ldots,N} \|\Sigma_\phi^i(s, a)\|_F
+  u_{off}(s, a) = \max_{i=1,\ldots,N} \|\Sigma_\phi^i(s, a)\|_F.
 \end{equation}
 
 该设计的考量是：在离线到在线设定下，在线阶段将显式补充高不确定性区域的数据，因此离线阶段不需要像第三章那样精细地度量累积不确定性，采用更简洁的即时不确定性度量即可。基于此，定义不确定性惩罚奖励：
 \begin{equation}\label{Eq:Chap4_penalized_reward}
-  \tilde{r}(s, a) = \hat{r}(s, a) - \lambda_{off} \cdot u_{off}(s, a)
+  \tilde{r}(s, a) = \hat{r}(s, a) - \lambda_{off} \cdot u_{off}(s, a).
 \end{equation}
 
 策略优化采用第三章相同的SAC算法框架（公式\ref{Eq:Chap3_sac_objective}）。训练数据从离线数据集$\mathcal{D}_{off}$和模型生成数据集$\mathcal{D}_{model}$中按比例采样。模型生成数据通过从离线数据集中采样初始状态，利用当前策略与转移模型交互生成短期轨迹（rollout）获得。
@@ -65,9 +65,8 @@
 
 定向探索的核心思想是在策略优化目标中同时考虑不确定性和动作价值。具体而言，定义在线阶段的探索策略$\pi_\varphi$通过以下目标更新：
 \begin{equation}\label{Eq:Chap4_exploration_objective}
-  \nabla_\varphi J_\pi(\varphi) = \mathbb{E}_{(s,a) \sim \mathcal{D}_{on}}\left[\nabla_\varphi \log \pi_\varphi(a|s) \cdot (c \cdot u_{on}(s, a) + Q(s, a))\right]
+  \nabla_\varphi J_\pi(\varphi) = \mathbb{E}_{(s,a) \sim \mathcal{D}_{on}}\left[\nabla_\varphi \log \pi_\varphi(a|s) \cdot (c \cdot u_{on}(s, a) + Q(s, a))\right],
 \end{equation}
-
 其中$u_{on}(s, a)$为在线阶段的不确定性估计（详见第\ref{Sec4.4}节），$Q(s, a)$为动作价值函数，$c$为平衡不确定性与价值的权重系数，$\mathcal{D}_{on}$为在线交互采集的数据集。
 
 该目标函数的设计体现了定向探索的双重考量：
@@ -102,23 +101,21 @@
 
 在离线阶段，由于无法与真实环境交互，认知不确定性无法降低，因此主要关注偶然不确定性。偶然不确定性通过集成模型的预测方差估计：
 \begin{equation}\label{Eq:Chap4_aleatoric_uncertainty}
-  u_{off}(s, a) = \max_{i=1,\ldots,N} \|\Sigma_\phi^i(s, a)\|_F
+  u_{off}(s, a) = \max_{i=1,\ldots,N} \|\Sigma_\phi^i(s, a)\|_F.
 \end{equation}
 
 该度量反映环境动力学在状态-动作对$(s,a)$处的内在随机性。取集成模型中的最大方差是一种保守估计，确保在任一模型预测不确定时都施加惩罚。
 
 在在线阶段，目标是主动探索高认知不确定性区域以补充转移模型。因此，除偶然不确定性外，还需捕捉认知不确定性。认知不确定性通过集成模型均值预测的分歧度估计：
 \begin{equation}\label{Eq:Chap4_epistemic_uncertainty}
-  \text{DisVar}(s, a) = \frac{1}{d}\sum_{j=1}^{d} \text{Var}_{i=1,\ldots,N}[\mu_{\phi,j}^i(s, a)]
+  \text{DisVar}(s, a) = \frac{1}{d}\sum_{j=1}^{d} \text{Var}_{i=1,\ldots,N}[\mu_{\phi,j}^i(s, a)],
 \end{equation}
-
 其中$d$为预测向量维度，$\mu_{\phi,j}^i(s, a)$为第$i$个模型预测均值的第$j$个分量，$\text{Var}_{i=1,\ldots,N}[\cdot]$表示在集成成员间计算方差。该度量的核心思想是：在数据充分覆盖的区域，各模型因接收到足够的监督信号而收敛至相近的预测，分歧度较低；在数据稀疏的区域，模型因初始化差异而产生显著不同的预测，分歧度较高。
 
 在线阶段的不确定性估计综合两类不确定性：
 \begin{equation}\label{Eq:Chap4_online_uncertainty}
-  u_{on}(s, a) = \max_{i=1,\ldots,N} \|\Sigma_\phi^i(s, a)\|_F + \sqrt{\text{DisVar}(s, a)}
+  u_{on}(s, a) = \max_{i=1,\ldots,N} \|\Sigma_\phi^i(s, a)\|_F + \sqrt{\text{DisVar}(s, a)},
 \end{equation}
-
 第一项为偶然不确定性，第二项为认知不确定性的标准差形式。两项相加确保探索策略同时考虑环境的内在随机性和模型的知识缺乏，引导策略探索模型预测最不可靠的区域。
 
 
@@ -128,16 +125,14 @@
 
 由于不同任务的状态空间和奖励尺度存在显著差异，$Q(s,a)$和$u_{on}(s,a)$的数值量级可能相差悬殊。为便于跨任务调节权重，首先对两项进行归一化处理。具体而言，在离线阶段计算$\mathbb{E}_{(s,a) \sim \mathcal{D}_{off}}[Q(s,a)]$和$\mathbb{E}_{(s,a) \sim \mathcal{D}_{off}}[u(s,a)]$的均值和标准差。在线阶段，对计算得到的$Q(s,a)$和$u_{on}(s,a)$进行标准化：
 \begin{equation}\label{Eq:Chap4_normalization}
-  \bar{Q}(s,a) = \frac{Q(s,a) - \mu_Q}{\sigma_Q}, \quad \bar{u}_{on}(s,a) = \frac{u_{on}(s,a) - \mu_u}{\sigma_u}
+  \bar{Q}(s,a) = \frac{Q(s,a) - \mu_Q}{\sigma_Q}, \quad \bar{u}_{on}(s,a) = \frac{u_{on}(s,a) - \mu_u}{\sigma_u},
 \end{equation}
-
 其中$\mu_Q, \sigma_Q$和$\mu_u, \sigma_u$分别为离线阶段统计得到的均值和标准差。归一化后，两项处于可比较的数值范围，权重$c$的调节更加直观。
 
 为实现探索与利用的动态平衡，本章采用与第三章形式相似但方向相反的Sigmoid函数调制权重$c$随策略更新步数$k$的衰减：
 \begin{equation}\label{Eq:Chap4_dynamic_weight}
-  c = c_0 \cdot \frac{1}{1 + e^{(k - k_0) \cdot \nu}}
+  c = c_0 \cdot \frac{1}{1 + e^{(k - k_0) \cdot \nu}},
 \end{equation}
-
 其中$c_0$为初始权重，$k_0$为衰减中心点，$\nu$为衰减速率。对比第三章公式(\ref{Eq:Chap3_adaptive_weight})，两种权重函数都采用Sigmoid形式以确保平滑过渡，但变化趋势不同：第三章的惩罚权重随训练递增（从低到高），本章的探索权重随交互递减（从高到低）。该设计反映了两阶段的不同需求：在线交互初期，模型覆盖范围有限，应优先探索高不确定性区域以扩展模型的有效范围；随着交互推进，模型逐渐完善，应转向利用已学习的知识优化策略性能。
 
 通过动态权重自适应机制，算法在交互初期充分探索以补充转移模型，在交互后期充分利用以优化策略性能，实现探索与利用的自适应平衡。这一设计体现了本章方法与第三章方法的互补性：第三章在离线阶段建立保守的策略基础，本章在在线阶段突破这一保守边界，两者共同构成从保守到探索的完整学习闭环。
@@ -158,7 +153,7 @@
 \begin{thm}[定向探索的收敛速率]\label{Thm:Chap4_convergence}
   设转移函数$T \in \text{PC}(\beta, M)$为分段常数函数，$\hat{T}$为基于在线数据集$\mathcal{D}_{on}$学习得到的转移模型估计。若采样策略基于不确定性引导，即优先采样模型预测方差最大的状态-动作对，则模型估计误差的下界为：
   \begin{equation}\label{Eq:Chap4_convergence_bound}
-    \inf_{\hat{T}} \sup_{T \in \text{PC}(\beta, M)} \mathbb{E}[\|\hat{T} - T\|^2] \geq c \cdot |\mathcal{D}_{on}|^{-\frac{1}{d-1}}
+    \inf_{\hat{T}} \sup_{T \in \text{PC}(\beta, M)} \mathbb{E}[\|\hat{T} - T\|^2] \geq c \cdot |\mathcal{D}_{on}|^{-\frac{1}{d-1}},
   \end{equation}
   其中$c > 0$为与区域复杂度相关的常数，$d$为状态-动作空间的内在维度，$|\mathcal{D}_{on}|$为在线数据集的样本数量。
 \end{thm}
@@ -169,7 +164,7 @@
 
 作为对比，均匀采样策略的收敛速率下界为\cite{Korostelev1999Minimax}：
 \begin{equation}\label{Eq:Chap4_uniform_bound}
-  \inf_{\hat{T}} \sup_{T \in \text{PC}(\beta, M)} \mathbb{E}[\|\hat{T} - T\|^2] \geq c' \cdot |\mathcal{D}_{on}|^{-\frac{1}{d}}
+  \inf_{\hat{T}} \sup_{T \in \text{PC}(\beta, M)} \mathbb{E}[\|\hat{T} - T\|^2] \geq c' \cdot |\mathcal{D}_{on}|^{-\frac{1}{d}}.
 \end{equation}
 
 比较公式\ref{Eq:Chap4_convergence_bound}和公式\ref{Eq:Chap4_uniform_bound}，定向探索策略的收敛速率指数为$-\frac{1}{d-1}$，优于均匀采样的$-\frac{1}{d}$。这意味着在相同样本数量下，定向探索可实现更低的模型估计误差；或者，达到相同精度所需的样本数量更少。该理论结果为本文算法的样本效率优势提供了理论支撑。
