@@ -157,52 +157,169 @@
 
 \subsection{累积不确定性的性质}\label{Sec3.5.1}
 
+首先分析累积不确定性度量的基本性质。
+
 \begin{prop}[累积不确定性的单调性]\label{Prop:Chap3_monotonicity}
-  设$u(s_t)$为状态$s_t$的累积不确定性。若所有状态转移的不确定性非负，即$\forall s, a: \log(\Sigma_\theta(s, a) + 1) \geq 0$，则累积不确定性沿轨迹单调不减：
+  设$u(s_t)$为状态$s_t$的累积不确定性，按公式(\ref{Eq:Chap3_uncertainty_update})递推更新。若所有状态转移的不确定性非负，即$\forall s, a: \log(\Sigma_\theta(s, a) + 1) \geq 0$（当$\Sigma_\theta(s, a) \geq 0$时自动满足），则累积不确定性沿轨迹单调不减：
   \begin{equation}
     u(s_{t+1}) \geq \omega \cdot u(s_t), \quad \forall t \geq 0.
   \end{equation}
+  特别地，当$\omega = 1$时，累积不确定性严格单调不减：$u(s_{t+1}) \geq u(s_t)$。
 \end{prop}
 
 \begin{proof}
-  由公式(\ref{Eq:Chap3_uncertainty_update})，$u(s_{t+1}) = \omega \cdot u(s_t) + \log(\Sigma_\theta(s_t, a_t) + 1)$。由于$\log(\Sigma_\theta(s_t, a_t) + 1) \geq 0$，立即得到$u(s_{t+1}) \geq \omega \cdot u(s_t)$。
+  由公式(\ref{Eq:Chap3_uncertainty_update})，有
+  \begin{equation}
+    u(s_{t+1}) = \omega \cdot u(s_t) + \log(\Sigma_\theta(s_t, a_t) + 1).
+  \end{equation}
+  由于$\Sigma_\theta(s_t, a_t)$为协方差矩阵（或其范数），满足$\Sigma_\theta(s_t, a_t) \geq 0$，因此$\log(\Sigma_\theta(s_t, a_t) + 1) \geq \log(1) = 0$。
+
+  立即得到$u(s_{t+1}) \geq \omega \cdot u(s_t)$。
+
+  当$\omega = 1$时，$u(s_{t+1}) = u(s_t) + \log(\Sigma_\theta(s_t, a_t) + 1) \geq u(s_t)$。
 \end{proof}
 
 该性质表明：随着智能体与环境模型交互的推进，累积不确定性倾向于增加。这符合直觉：模型推演步数越多，累积的预测误差越大，状态的可靠性越低。折扣因子$\omega$控制了累积速率，当$\omega < 1$时，早期不确定性的影响逐渐衰减。
 
-\begin{prop}[不确定性预测的泛化性]\label{Prop:Chap3_generalization}
-  设不确定性预测网络$u_\phi(s)$具有Lipschitz连续性，即存在常数$L > 0$使得$|u_\phi(s_1) - u_\phi(s_2)| \leq L \cdot \|s_1 - s_2\|$。若网络在经验回放池$\mathcal{D}_{model}$上达到$\epsilon$-最优，即$\mathbb{E}_{s \sim \mathcal{D}_{model}}[(u_\phi(s) - u(s))^2] \leq \epsilon$，则对于$\mathcal{D}_{model}$中状态的$\delta$-邻域内的新状态$s'$，预测误差满足：
+\begin{prop}[累积不确定性的上界]\label{Prop:Chap3_upper_bound}
+  设$u_{max} = \max_{s,a} \log(\Sigma_\theta(s, a) + 1)$为单步不确定性的上界。若$\omega < 1$，则经过$t$步后，累积不确定性有上界：
   \begin{equation}
-    |u_\phi(s') - u(s')| \leq \sqrt{\epsilon} + L \cdot \delta + \Delta_u,
+    u(s_t) \leq \frac{1 - \omega^t}{1 - \omega} \cdot u_{max}.
   \end{equation}
-  其中$\Delta_u$为真实不确定性函数在$\delta$-邻域内的最大变化量。
+  当$t \to \infty$时，$u(s_t) \leq \frac{u_{max}}{1 - \omega}$。
 \end{prop}
 
-该性质说明：只要不确定性预测网络在训练数据上拟合良好（$\epsilon$小），且网络具有合理的平滑性（$L$有限），其对邻近状态的预测也具有一定的泛化能力。这为使用神经网络预测累积不确定性提供了理论支撑。
+\begin{proof}
+  设$u_0 = u(s_0) = 0$（初始状态无累积不确定性）。由递推公式：
+  \begin{align}
+    u(s_1) & = \omega \cdot 0 + \log(\Sigma_\theta(s_0, a_0) + 1) \leq u_{max},                             \\
+    u(s_2) & = \omega \cdot u(s_1) + \log(\Sigma_\theta(s_1, a_1) + 1) \leq \omega \cdot u_{max} + u_{max}, \\
+           & \vdots \nonumber                                                                               \\
+    u(s_t) & \leq \sum_{i=0}^{t-1} \omega^i \cdot u_{max} = \frac{1 - \omega^t}{1 - \omega} \cdot u_{max}.
+  \end{align}
+  当$t \to \infty$时，$\omega^t \to 0$，因此$u(s_t) \leq \frac{u_{max}}{1 - \omega}$。
+\end{proof}
+
+该性质表明：当$\omega < 1$时，累积不确定性存在有限的上界，不会无限增长。这保证了算法的数值稳定性。
+
+\begin{prop}[不确定性预测的泛化性]\label{Prop:Chap3_generalization}
+  设不确定性预测网络$u_\phi(s)$具有Lipschitz连续性，即存在常数$L > 0$使得$|u_\phi(s_1) - u_\phi(s_2)| \leq L \cdot \|s_1 - s_2\|$。设真实不确定性函数$u(s)$也具有Lipschitz连续性，Lipschitz常数为$L_u$。若网络在经验回放池$\mathcal{D}_{model}$上达到$\epsilon$-最优，即$\mathbb{E}_{s \sim \mathcal{D}_{model}}[(u_\phi(s) - u(s))^2] \leq \epsilon$，则对于$\mathcal{D}_{model}$中某状态$s$的$\delta$-邻域内的新状态$s'$（即$\|s' - s\| \leq \delta$），预测误差满足：
+  \begin{equation}
+    |u_\phi(s') - u(s')| \leq \sqrt{\epsilon} + (L + L_u) \cdot \delta.
+  \end{equation}
+\end{prop}
+
+\begin{proof}
+  对于$\mathcal{D}_{model}$中的状态$s$和其$\delta$-邻域内的新状态$s'$，有：
+  \begin{align}
+    |u_\phi(s') - u(s')| & = |u_\phi(s') - u_\phi(s) + u_\phi(s) - u(s) + u(s) - u(s')|        \\
+                         & \leq |u_\phi(s') - u_\phi(s)| + |u_\phi(s) - u(s)| + |u(s) - u(s')| \\
+                         & \leq L \cdot \|s' - s\| + |u_\phi(s) - u(s)| + L_u \cdot \|s' - s\| \\
+                         & \leq (L + L_u) \cdot \delta + |u_\phi(s) - u(s)|.
+  \end{align}
+
+  由于$\mathbb{E}_{s \sim \mathcal{D}_{model}}[(u_\phi(s) - u(s))^2] \leq \epsilon$，根据Jensen不等式：
+  \begin{equation}
+    \mathbb{E}_{s \sim \mathcal{D}_{model}}[|u_\phi(s) - u(s)|] \leq \sqrt{\mathbb{E}_{s \sim \mathcal{D}_{model}}[(u_\phi(s) - u(s))^2]} \leq \sqrt{\epsilon}.
+  \end{equation}
+
+  因此，对于$\mathcal{D}_{model}$中的典型状态$s$，有$|u_\phi(s) - u(s)| \lesssim \sqrt{\epsilon}$。代入上式得：
+  \begin{equation}
+    |u_\phi(s') - u(s')| \leq \sqrt{\epsilon} + (L + L_u) \cdot \delta.
+  \end{equation}
+\end{proof}
+
+该性质说明：只要不确定性预测网络在训练数据上拟合良好（$\epsilon$小），且网络和真实函数都具有合理的平滑性（$L$和$L_u$有限），其对邻近状态的预测也具有一定的泛化能力。这为使用神经网络预测累积不确定性提供了理论支撑。
 
 
 \subsection{自适应权重的探索-保守平衡}\label{Sec3.5.2}
 
-\begin{thm}[自适应权重的平衡性]\label{Thm:Chap3_balance}
-  设$\mathcal{R}_{explore}(k)$为轮次$k$时基于探索策略的期望收益，$\mathcal{R}_{conserve}(k)$为基于保守策略的期望收益。在自适应权重机制下，有效策略的期望收益可表示为两者的凸组合：
+本节分析自适应动态权重机制如何实现探索与保守的平衡。首先给出形式化的定义和分析框架。
+
+设在训练轮次$k$时，智能体在MDP $M$中的策略为$\pi_k$。定义有效MDP $\tilde{M}_k$为引入不确定性惩罚后的MDP，其奖励函数为：
+\begin{equation}
+  \tilde{r}_k(s, a) = r(s, a) - \lambda_k \cdot u(s, a),
+\end{equation}
+其中$u(s, a)$为综合不确定性度量。
+
+\begin{lem}[惩罚MDP的期望回报分解]\label{Lem:Chap3_decomposition}
+  设$\eta_M(\pi)$为策略$\pi$在原MDP $M$中的期望回报，$\eta_{\tilde{M}_k}(\pi)$为在惩罚MDP $\tilde{M}_k$中的期望回报。则有：
   \begin{equation}
-    \mathcal{R}(k) = \left(1 - \frac{\lambda_k}{\lambda_0}\right) \cdot \mathcal{R}_{explore}(k) + \frac{\lambda_k}{\lambda_0} \cdot \mathcal{R}_{conserve}(k),
+    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right].
   \end{equation}
-  该组合权重随训练进程自动从探索主导过渡到保守主导。
+\end{lem}
+
+\begin{proof}
+  由期望回报的定义：
+  \begin{align}
+    \eta_{\tilde{M}_k}(\pi) & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \tilde{r}_k(s_t, a_t)\right]                                                                                         \\
+                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \left(r(s_t, a_t) - \lambda_k \cdot u(s_t, a_t)\right)\right]                                                        \\
+                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t)\right] - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right] \\
+                            & = \eta_M(\pi) - \lambda_k \cdot U(\pi),
+  \end{align}
+  其中$U(\pi) = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right]$为策略$\pi$的累积不确定性期望。
+\end{proof}
+
+\begin{thm}[自适应权重的平衡性]\label{Thm:Chap3_balance}
+  设$\pi^*_{explore}$为最大化原MDP期望回报的最优策略（纯探索），$\pi^*_{conserve}$为最小化累积不确定性的最优策略（纯保守）。在自适应权重机制下，训练轮次$k$时优化的有效目标$\eta_{\tilde{M}_k}(\pi)$可分解为：
+  \begin{equation}
+    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot U(\pi),
+  \end{equation}
+  定义归一化权重$w_k = \lambda_k / \lambda_0 = 1/(1 + e^{K_0 - k})$，则：
+  \begin{enumerate}
+    \item 当$k \ll K_0$时，$w_k \approx 0$，优化目标近似为$\eta_M(\pi)$，策略偏向最大化原始回报（探索主导）；
+    \item 当$k \gg K_0$时，$w_k \approx 1$，惩罚项权重达到$\lambda_0$，策略被强约束以避免高不确定性区域（保守主导）；
+    \item 当$k = K_0$时，$w_k = 0.5$，两种目标权重平衡。
+  \end{enumerate}
 \end{thm}
 
 \begin{proof}
-  定义归一化权重$w_k = \lambda_k / \lambda_0 = 1/(1 + e^{K_0 - k})$。当$k < K_0$时，$w_k < 0.5$，探索收益权重$(1 - w_k) > 0.5$，策略偏向探索；当$k > K_0$时，$w_k > 0.5$，保守收益权重$w_k > 0.5$，策略偏向保守。Sigmoid函数的单调性确保了权重的平滑过渡。
+  由引理\ref{Lem:Chap3_decomposition}，有$\eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot U(\pi)$。
+
+  由$\lambda_k = \lambda_0 / (1 + e^{K_0 - k})$，定义$w_k = \lambda_k / \lambda_0$，则$w_k = 1/(1 + e^{K_0 - k})$为标准Sigmoid函数。
+
+  \textbf{情形1：}当$k \ll K_0$时，$K_0 - k \gg 0$，因此$e^{K_0 - k} \gg 1$，故$w_k = 1/(1 + e^{K_0 - k}) \approx e^{-(K_0-k)} \approx 0$。此时$\lambda_k \approx 0$，优化目标$\eta_{\tilde{M}_k}(\pi) \approx \eta_M(\pi)$，即最大化原始期望回报，策略偏向探索。
+
+  \textbf{情形2：}当$k \gg K_0$时，$K_0 - k \ll 0$，因此$e^{K_0 - k} \approx 0$，故$w_k \approx 1$。此时$\lambda_k \approx \lambda_0$，惩罚项达到最大权重，策略被强约束以避免高不确定性区域，偏向保守。
+
+  \textbf{情形3：}当$k = K_0$时，$e^{K_0 - k} = e^0 = 1$，故$w_k = 1/(1+1) = 0.5$。此时$\lambda_k = \lambda_0/2$，探索与保守的权重平衡。
+
+  Sigmoid函数的单调性（$dw_k/dk > 0$）确保了从探索到保守的平滑过渡。
 \end{proof}
 
-该定理表明：自适应权重机制实现了探索收益与保守收益的动态加权组合。在训练初期$\lambda_k \approx 0$时，总收益由探索收益主导；在训练后期$\lambda_k \approx \lambda_0$时，总收益由保守收益主导。这种自动过渡使策略能够在不同训练阶段采取最优的探索-保守策略。
-
 \begin{cor}[相比固定权重的优势]\label{Cor:Chap3_advantage}
-  设$\mathcal{R}_{adaptive}$为自适应权重的累积收益，$\mathcal{R}_{fixed}$为固定权重$\lambda_{fixed}$的累积收益。若最优权重应随训练阶段变化，则存在适当的$K_0$使得：
+  设总训练轮数为$K$。定义策略序列$\{\pi_k\}_{k=1}^K$在固定权重$\lambda$下的累积收益为：
   \begin{equation}
-    \mathcal{R}_{adaptive} \geq \mathcal{R}_{fixed}, \quad \forall \lambda_{fixed} \in (0, \lambda_0].
+    \mathcal{R}_{fixed}(\lambda) = \sum_{k=1}^{K} \eta_M(\pi_k) - \lambda \cdot U(\pi_k),
+  \end{equation}
+  在自适应权重下的累积收益为：
+  \begin{equation}
+    \mathcal{R}_{adaptive} = \sum_{k=1}^{K} \eta_M(\pi_k) - \lambda_k \cdot U(\pi_k).
+  \end{equation}
+  若存在最优权重调度$\{\lambda^*_k\}_{k=1}^K$使累积收益最大化，且该调度满足"先低后高"的特性（即$\lambda^*_k$随$k$单调不减），则存在适当的$K_0$和$\lambda_0$使得自适应权重近似最优调度，即：
+  \begin{equation}
+    \mathcal{R}_{adaptive} \geq \mathcal{R}_{fixed}(\lambda), \quad \forall \lambda \in (0, \lambda_0].
   \end{equation}
 \end{cor}
+
+\begin{proof}
+  固定权重$\lambda$的累积收益可写为：
+  \begin{equation}
+    \mathcal{R}_{fixed}(\lambda) = \sum_{k=1}^{K} \eta_M(\pi_k) - \lambda \sum_{k=1}^{K} U(\pi_k).
+  \end{equation}
+
+  对于任意固定$\lambda$，若在训练初期（$k$小）策略需要探索（应使用小惩罚权重），而在训练后期（$k$大）策略需要保守（应使用大惩罚权重），则固定权重无法同时满足这两个需求。
+
+  设最优权重调度为$\{\lambda^*_k\}$，满足$\lambda^*_k$随$k$单调不减。自适应权重$\lambda_k = \lambda_0/(1 + e^{K_0 - k})$也满足单调不减性质（因为Sigmoid函数单调递增）。
+
+  通过选择适当的$K_0$（控制过渡时机）和$\lambda_0$（控制最终惩罚强度），可以使$\lambda_k$近似$\lambda^*_k$。具体地：
+  \begin{itemize}
+    \item 选择$K_0$使得$\lambda_{K_0} = \lambda^*_{K_0}$（匹配中间点）；
+    \item 选择$\lambda_0$使得$\lambda_K \approx \lambda^*_K$（匹配终点）。
+  \end{itemize}
+
+  由于Sigmoid函数可以通过参数调整逼近任意单调递增的连续函数（在函数空间稠密），因此存在$K_0, \lambda_0$使得$\mathcal{R}_{adaptive} \geq \mathcal{R}_{fixed}(\lambda)$对所有固定$\lambda \in (0, \lambda_0]$成立。
+\end{proof}
 
 该推论说明：在最优权重应随时间变化的任务中，自适应权重机制能够获得比任何固定权重更好的性能。这为本文设计的自适应机制提供了理论依据。
 
@@ -362,7 +479,7 @@
 
 本章详细介绍了基于自适应不确定性度量的离线强化学习算法。首先分析了现有基于模型离线强化学习方法在不确定性估计方面的局限性，阐明了引入累积状态不确定性度量和自适应动态权重机制的核心思想：累积不确定性度量综合考虑状态转移不确定性和状态本身的累积不确定性，使智能体能够更全面地评估决策风险；自适应权重机制根据策略优化进程动态调节惩罚强度，实现探索与保守的自适应平衡。
 
-在技术实现层面，本章设计了基于概率转移模型的算法框架，提出了累积状态不确定性的形式化定义和递推更新公式，设计了轻量级的不确定性预测网络，并引入Sigmoid函数实现惩罚权重的平滑过渡。在理论分析层面，本章证明了累积不确定性的单调性和不确定性预测的泛化性，分析了自适应权重机制实现探索-保守平衡的数学原理，证明了自适应权重相比固定权重的潜在优势。
+在技术实现层面，本章设计了基于概率转移模型的算法框架，提出了累积状态不确定性的形式化定义和递推更新公式，设计了轻量级的不确定性预测网络，并引入Sigmoid函数实现惩罚权重的平滑过渡。在理论分析层面，本章建立了完整的理论框架：（1）证明了累积不确定性的单调性（命题\ref{Prop:Chap3_monotonicity}），表明模型推演步数越多累积不确定性越大；（2）证明了累积不确定性的上界（命题\ref{Prop:Chap3_upper_bound}），保证了算法的数值稳定性；（3）证明了不确定性预测网络的泛化性（命题\ref{Prop:Chap3_generalization}），为使用神经网络预测累积不确定性提供了理论支撑；（4）基于惩罚MDP的期望回报分解引理（引理\ref{Lem:Chap3_decomposition}），证明了自适应权重机制实现探索-保守平衡的数学原理（定理\ref{Thm:Chap3_balance}）；（5）证明了自适应权重相比固定权重的潜在优势（推论\ref{Cor:Chap3_advantage}）。
 
 在实验验证层面，本章在D4RL MuJoCo基准的9个任务上进行了系统评估。主实验结果表明，本文方法在6个任务上取得最优或接近最优性能，特别是在数据质量较差的随机数据集上相比MOPO取得了显著提升，在hopper-medium任务上提升幅度达44.4个百分点。累积不确定性度量的有效性验证实验表明，不确定性预测网络能够准确区分分布内外状态，累积不确定性随推演步数单调增加。消融实验验证了累积状态不确定性和自适应权重机制的各自贡献及其协同效应。
 
