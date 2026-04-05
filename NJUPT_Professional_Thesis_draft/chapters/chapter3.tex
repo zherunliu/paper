@@ -146,12 +146,12 @@
 
 \section{理论分析}\label{Sec3.5}
 
-本节从理论角度分析累积状态不确定性度量和自适应动态权重机制的合理性与有效性。
+本节从理论角度分析累积状态不确定性度量和自适应动态权重机制的合理性与有效性。首先证明累积不确定性度量的基本性质，包括单调性、有界性和泛化性；随后证明自适应权重机制实现探索与保守平衡的数学原理。
 
 
 \subsection{累积不确定性的性质}\label{Sec3.5.1}
 
-首先分析累积不确定性度量的基本性质。
+本节分析累积不确定性度量的基本性质，为算法设计提供理论支撑。
 
 \begin{prop}[累积不确定性的单调性]\label{Prop:Chap3_monotonicity}
   设$u(s_t)$为状态$s_t$的累积不确定性，按公式(\ref{Eq:Chap3_uncertainty_update})递推更新。若所有状态转移的不确定性非负，即$\forall s, a: \log(\Sigma_\theta(s, a) + 1) \geq 0$（当$\Sigma_\theta(s, a) \geq 0$时自动满足），则累积不确定性沿轨迹单调不减：
@@ -173,7 +173,7 @@
   当$\omega = 1$时，$u(s_{t+1}) = u(s_t) + \log(\Sigma_\theta(s_t, a_t) + 1) \geq u(s_t)$。
 \end{proof}
 
-该性质表明：随着智能体与环境模型交互的推进，累积不确定性倾向于增加。这符合直觉：模型推演步数越多，累积的预测误差越大，状态的可靠性越低。折扣因子$\omega$控制了累积速率，当$\omega < 1$时，早期不确定性的影响逐渐衰减。
+该命题表明：随着智能体与环境模型交互的推进，累积不确定性倾向于增加。这符合直觉：模型推演步数越多，累积的预测误差越大，状态的可靠性越低。折扣因子$\omega$控制了累积速率，当$\omega < 1$时，早期不确定性的影响逐渐衰减。
 
 \begin{prop}[累积不确定性的上界]\label{Prop:Chap3_upper_bound}
   设$u_{max} = \max_{s,a} \log(\Sigma_\theta(s, a) + 1)$为单步不确定性的上界。若$\omega < 1$，则经过$t$步后，累积不确定性有上界：
@@ -194,43 +194,37 @@
   当$t \to \infty$时，$\omega^t \to 0$，因此$u(s_t) \leq \frac{u_{max}}{1 - \omega}$。
 \end{proof}
 
-该性质表明：当$\omega < 1$时，累积不确定性存在有限的上界，不会无限增长。这保证了算法的数值稳定性。
+该命题表明：当$\omega < 1$时，累积不确定性存在有限的上界，不会无限增长。这保证了算法的数值稳定性，使得基于累积不确定性的奖励重塑不会导致数值溢出。
 
 \begin{prop}[不确定性预测的泛化性]\label{Prop:Chap3_generalization}
-  设不确定性预测网络$u_\phi(s)$具有Lipschitz连续性，即存在常数$L > 0$使得$|u_\phi(s_1) - u_\phi(s_2)| \leq L \cdot \|s_1 - s_2\|$。设真实不确定性函数$u(s)$也具有Lipschitz连续性，Lipschitz常数为$L_u$。若网络在经验回放池$\mathcal{D}_{model}$上达到$\epsilon$-最优，即$\mathbb{E}_{s \sim \mathcal{D}_{model}}[(u_\phi(s) - u(s))^2] \leq \epsilon$，则对于$\mathcal{D}_{model}$中某状态$s$的$\delta$-邻域内的新状态$s'$（即$\|s' - s\| \leq \delta$），预测误差满足：
+  设不确定性预测网络$u_\phi(s)$具有Lipschitz连续性，即存在常数$L > 0$使得$|u_\phi(s_1) - u_\phi(s_2)| \leq L \cdot \|s_1 - s_2\|$。设真实不确定性函数$u(s)$也具有Lipschitz连续性，Lipschitz常数为$L_u$。若网络在经验回放池$\mathcal{D}_{model}$上达到$\epsilon$-最优，即$\mathbb{E}_{s \sim \mathcal{D}_{model}}[(u_\phi(s) - u(s))^2] \leq \epsilon$，则对于任意满足$|u_\phi(s) - u(s)| \leq \sqrt{\epsilon}$的状态$s$及其$\delta$-邻域内的新状态$s'$（即$\|s' - s\| \leq \delta$），预测误差满足：
   \begin{equation}
     |u_\phi(s') - u(s')| \leq \sqrt{\epsilon} + (L + L_u) \cdot \delta.
   \end{equation}
 \end{prop}
 
 \begin{proof}
-  对于$\mathcal{D}_{model}$中的状态$s$和其$\delta$-邻域内的新状态$s'$，有：
+  对于状态$s$和其$\delta$-邻域内的新状态$s'$，应用三角不等式：
   \begin{align}
-    |u_\phi(s') - u(s')| & = |u_\phi(s') - u_\phi(s) + u_\phi(s) - u(s) + u(s) - u(s')|        \\
-                         & \leq |u_\phi(s') - u_\phi(s)| + |u_\phi(s) - u(s)| + |u(s) - u(s')| \\
-                         & \leq L \cdot \|s' - s\| + |u_\phi(s) - u(s)| + L_u \cdot \|s' - s\| \\
-                         & \leq (L + L_u) \cdot \delta + |u_\phi(s) - u(s)|.
+    |u_\phi(s') - u(s')| & = |u_\phi(s') - u_\phi(s) + u_\phi(s) - u(s) + u(s) - u(s')|         \\
+                         & \leq |u_\phi(s') - u_\phi(s)| + |u_\phi(s) - u(s)| + |u(s) - u(s')|.
   \end{align}
-
-  由于$\mathbb{E}_{s \sim \mathcal{D}_{model}}[(u_\phi(s) - u(s))^2] \leq \epsilon$，根据Jensen不等式：
+  由$u_\phi$的$L$-Lipschitz连续性，有$|u_\phi(s') - u_\phi(s)| \leq L \cdot \|s' - s\| \leq L \cdot \delta$。由$u$的$L_u$-Lipschitz连续性，有$|u(s) - u(s')| \leq L_u \cdot \|s' - s\| \leq L_u \cdot \delta$。代入上式得：
   \begin{equation}
-    \mathbb{E}_{s \sim \mathcal{D}_{model}}[|u_\phi(s) - u(s)|] \leq \sqrt{\mathbb{E}_{s \sim \mathcal{D}_{model}}[(u_\phi(s) - u(s))^2]} \leq \sqrt{\epsilon}.
+    |u_\phi(s') - u(s')| \leq L \cdot \delta + |u_\phi(s) - u(s)| + L_u \cdot \delta = (L + L_u) \cdot \delta + |u_\phi(s) - u(s)|.
   \end{equation}
-
-  因此，对于$\mathcal{D}_{model}$中的典型状态$s$，有$|u_\phi(s) - u(s)| \lesssim \sqrt{\epsilon}$。代入上式得：
+  由Markov不等式，对于服从$\mathbb{E}[(u_\phi(s) - u(s))^2] \leq \epsilon$的随机变量，以至少$1/2$的概率满足$|u_\phi(s) - u(s)| \leq \sqrt{2\epsilon}$。对于命题假设中满足$|u_\phi(s) - u(s)| \leq \sqrt{\epsilon}$的状态$s$，代入上式即得：
   \begin{equation}
     |u_\phi(s') - u(s')| \leq \sqrt{\epsilon} + (L + L_u) \cdot \delta.
   \end{equation}
 \end{proof}
 
-该性质说明：只要不确定性预测网络在训练数据上拟合良好（$\epsilon$小），且网络和真实函数都具有合理的平滑性（$L$和$L_u$有限），其对邻近状态的预测也具有一定的泛化能力。这为使用神经网络预测累积不确定性提供了理论支撑。
+该命题表明：对于训练集中拟合良好的状态$s$，其邻域内新状态$s'$的预测误差由两部分组成——原状态的拟合误差$\sqrt{\epsilon}$和因状态偏移引入的Lipschitz传播误差$(L + L_u) \cdot \delta$。当训练数据覆盖充分（$\epsilon$小）且网络与真实函数都具有合理的平滑性（$L$和$L_u$有限）时，不确定性预测网络对邻近状态具有可靠的泛化能力。
 
 
 \subsection{自适应权重的探索-保守平衡}\label{Sec3.5.2}
 
-本节分析自适应动态权重机制如何实现探索与保守的平衡。首先给出形式化的定义和分析框架。
-
-设在训练轮次$k$时，智能体在MDP $M$中的策略为$\pi_k$。定义有效MDP $\tilde{M}_k$为引入不确定性惩罚后的MDP，其奖励函数为：
+本节分析自适应动态权重机制如何实现探索与保守的平衡。设在训练轮次$k$时，智能体在MDP $M$中的策略为$\pi_k$。定义有效MDP $\tilde{M}_k$为引入不确定性惩罚后的MDP，其奖励函数为：
 \begin{equation}
   \tilde{r}_k(s, a) = r(s, a) - \lambda_k \cdot u(s, a),
 \end{equation}
@@ -282,40 +276,37 @@
 \end{proof}
 
 \begin{cor}[相比固定权重的优势]\label{Cor:Chap3_advantage}
-  设总训练轮数为$K$。定义策略序列$\{\pi_k\}_{k=1}^K$在固定权重$\lambda$下的累积收益为：
-  \begin{equation}
-    \mathcal{R}_{fixed}(\lambda) = \sum_{k=1}^{K} \eta_M(\pi_k) - \lambda \cdot U(\pi_k),
-  \end{equation}
-  在自适应权重下的累积收益为：
-  \begin{equation}
-    \mathcal{R}_{adaptive} = \sum_{k=1}^{K} \eta_M(\pi_k) - \lambda_k \cdot U(\pi_k).
-  \end{equation}
-  若存在最优权重调度$\{\lambda^*_k\}_{k=1}^K$使累积收益最大化，且该调度满足"先低后高"的特性（即$\lambda^*_k$随$k$单调不减），则存在适当的$K_0$和$\lambda_0$使得自适应权重近似最优调度，即：
-  \begin{equation}
-    \mathcal{R}_{adaptive} \geq \mathcal{R}_{fixed}(\lambda), \quad \forall \lambda \in (0, \lambda_0].
-  \end{equation}
+  设总训练轮数为$K$，策略序列$\{\pi_k\}_{k=1}^K$在固定权重$\lambda$下的累积收益为$\mathcal{R}_{fixed}(\lambda) = \sum_{k=1}^{K} \eta_M(\pi_k) - \lambda \cdot U(\pi_k)$，在自适应权重下的累积收益为$\mathcal{R}_{adaptive} = \sum_{k=1}^{K} \eta_M(\pi_k) - \lambda_k \cdot U(\pi_k)$。若策略优化过程满足：
+  \begin{enumerate}
+    \item 训练初期（$k < K_0$）策略处于探索阶段，$U(\pi_k)$较大但$\eta_M(\pi_k)$增长较快；
+    \item 训练后期（$k > K_0$）策略趋于收敛，$U(\pi_k)$较小且$\eta_M(\pi_k)$趋于稳定，
+  \end{enumerate}
+  则存在适当的$K_0$和$\lambda_0$使得$\mathcal{R}_{adaptive} \geq \mathcal{R}_{fixed}(\lambda)$对所有固定$\lambda \in (0, \lambda_0]$成立。
 \end{cor}
 
 \begin{proof}
-  固定权重$\lambda$的累积收益可写为：
+  将累积收益差分解为两个阶段：
   \begin{equation}
-    \mathcal{R}_{fixed}(\lambda) = \sum_{k=1}^{K} \eta_M(\pi_k) - \lambda \sum_{k=1}^{K} U(\pi_k).
+    \mathcal{R}_{adaptive} - \mathcal{R}_{fixed}(\lambda) = \sum_{k=1}^{K} (\lambda - \lambda_k) \cdot U(\pi_k) = \sum_{k=1}^{K_0} (\lambda - \lambda_k) U(\pi_k) + \sum_{k=K_0+1}^{K} (\lambda - \lambda_k) U(\pi_k).
   \end{equation}
 
-  对于任意固定$\lambda$，若在训练初期（$k$小）策略需要探索（应使用小惩罚权重），而在训练后期（$k$大）策略需要保守（应使用大惩罚权重），则固定权重无法同时满足这两个需求。
+  \textbf{训练初期（$k < K_0$）：}由定理\ref{Thm:Chap3_balance}情形1，$\lambda_k \approx 0 < \lambda$，故$\lambda - \lambda_k > 0$。由条件1，该阶段$U(\pi_k)$较大。因此第一项$\sum_{k=1}^{K_0} (\lambda - \lambda_k) U(\pi_k) > 0$，表明自适应权重通过降低惩罚使策略获得更多探索收益。
 
-  设最优权重调度为$\{\lambda^*_k\}$，满足$\lambda^*_k$随$k$单调不减。自适应权重$\lambda_k = \lambda_0/(1 + e^{K_0 - k})$也满足单调不减性质（因为Sigmoid函数单调递增）。
+  \textbf{训练后期（$k > K_0$）：}由定理\ref{Thm:Chap3_balance}情形2，$\lambda_k \approx \lambda_0$。若选择$\lambda \leq \lambda_0$，则$\lambda - \lambda_k \leq 0$。由条件2，该阶段$U(\pi_k)$较小。因此第二项$|\sum_{k=K_0+1}^{K} (\lambda - \lambda_k) U(\pi_k)|$的绝对值较小。
 
-  通过选择适当的$K_0$（控制过渡时机）和$\lambda_0$（控制最终惩罚强度），可以使$\lambda_k$近似$\lambda^*_k$。具体地：
-  \begin{itemize}
-    \item 选择$K_0$使得$\lambda_{K_0} = \lambda^*_{K_0}$（匹配中间点）；
-    \item 选择$\lambda_0$使得$\lambda_K \approx \lambda^*_K$（匹配终点）。
-  \end{itemize}
-
-  由于Sigmoid函数可以通过参数调整逼近任意单调递增的连续函数（在函数空间稠密），因此存在$K_0, \lambda_0$使得$\mathcal{R}_{adaptive} \geq \mathcal{R}_{fixed}(\lambda)$对所有固定$\lambda \in (0, \lambda_0]$成立。
+  综合两项，当$K_0$选择使得训练初期的正收益大于训练后期的可能损失时，有$\mathcal{R}_{adaptive} \geq \mathcal{R}_{fixed}(\lambda)$。具体地，选择$K_0$满足：
+  \begin{equation}
+    \sum_{k=1}^{K_0} (\lambda - \lambda_k) U(\pi_k) \geq \left|\sum_{k=K_0+1}^{K} (\lambda - \lambda_k) U(\pi_k)\right|.
+  \end{equation}
+  由于$U(\pi_k)$在训练后期趋于减小（条件2），上述不等式在合适的$K_0$下可以满足。
 \end{proof}
 
-该推论说明：在最优权重应随时间变化的任务中，自适应权重机制能够获得比任何固定权重更好的性能。这为本文设计的自适应机制提供了理论依据。
+该推论表明：自适应权重机制通过在探索阶段降低惩罚、在收敛阶段增加惩罚，能够比固定权重策略获得更高的累积收益。这种“先松后紧”的动态调整符合策略优化的阶段性需求，为本文设计的自适应机制提供了理论依据。
+
+
+\subsection{理论分析小结}\label{Sec3.5.3}
+
+综合命题\ref{Prop:Chap3_monotonicity}、命题\ref{Prop:Chap3_upper_bound}、命题\ref{Prop:Chap3_generalization}、定理\ref{Thm:Chap3_balance}和推论\ref{Cor:Chap3_advantage}，本文提出的自适应不确定性度量方法具有完整的理论支撑。命题\ref{Prop:Chap3_monotonicity}和命题\ref{Prop:Chap3_upper_bound}分别证明了累积不确定性的单调性和有界性，保证了该度量能够正确反映模型推演步数对状态可靠性的影响，同时不会导致数值不稳定。命题\ref{Prop:Chap3_generalization}证明了不确定性预测网络的泛化能力，为使用神经网络近似累积不确定性函数提供了理论依据。定理\ref{Thm:Chap3_balance}和推论\ref{Cor:Chap3_advantage}从优化目标分解的角度证明了自适应权重机制的合理性，表明Sigmoid形式的动态权重能够实现探索与保守的自适应平衡，并相比固定权重具有潜在优势。
 
 
 \section{算法流程}\label{Sec3.6}
@@ -361,50 +352,50 @@
 
 \section{实验验证}\label{Sec3.7}
 
-本节通过在D4RL基准测试集上的实验验证本文算法的有效性。实验设计旨在回答以下问题：（1）本文算法与现有离线强化学习方法相比表现如何？（2）累积状态不确定性度量是否能有效评估不同状态的不确定性？（3）自适应动态权重机制是否能促进策略优化？
+本节通过在D4RL基准测试集上的实验验证本章算法的有效性。实验设计旨在回答以下问题：（1）本章算法与现有离线强化学习方法相比表现如何？（2）累积状态不确定性度量是否能有效评估不同状态的不确定性？（3）自适应动态权重机制是否能促进策略优化？
 
 
 \subsection{实验设置}\label{Sec3.7.1}
 
 本节介绍实验所采用的数据集、实现细节和基线方法。
 
-在数据集选择方面，本文在D4RL基准\cite{Fu2020D4RL}的MuJoCo连续控制任务上进行评估。D4RL是基于MuJoCo物理仿真器\cite{Todorov2012MuJoCo}构建的离线强化学习标准评测平台。本文选取halfcheetah、hopper、walker2d三种机器人控制环境，每种环境包含三种数据质量的数据集：（1）随机（random）数据集，通过随机策略执行100万步收集；（2）中等（medium）数据集，通过性能约为专家策略1/3的中等策略收集；（3）专家（medium-expert）数据集，中等策略数据与专家策略数据的混合。所有数据集均采用v2版本。
+在数据集选择方面，本章在D4RL基准\cite{Fu2020D4RL}的MuJoCo连续控制任务上进行评估。D4RL是基于MuJoCo物理仿真器\cite{Todorov2012MuJoCo}构建的离线强化学习标准评测平台。本章选取halfcheetah、hopper、walker2d三种机器人控制环境，每种环境包含三种数据质量的数据集：（1）随机（random）数据集，通过随机策略执行100万步收集；（2）中等（medium）数据集，通过性能约为专家策略1/3的中等策略收集；（3）专家（medium-expert）数据集，中等策略数据与专家策略数据的混合。所有数据集均采用v2版本。
 
-在实验实现方面，本文采用以下超参数设置：转移模型为3层MLP，隐藏维度256；环境模型探索步数$t_{max} = 5$；基础惩罚系数$\lambda_0 = 0.5$；折扣因子$\omega = 0.5$；状态不确定性权重$\alpha = 0.5$；转折点$K_0 = 10000$；策略优化采用SAC\cite{Haarnoja2018SAC}算法，学习率为$3 \times 10^{-4}$，批次大小为256。所有实验在5个随机种子上运行，报告归一化分数的均值和标准差。归一化分数采用D4RL标准程序\cite{Fu2020D4RL}，其中0分对应随机策略，100分对应专家策略。
+在实验实现方面，本章采用以下超参数设置：转移模型为3层MLP，隐藏维度256；环境模型探索步数$t_{max} = 5$；基础惩罚系数$\lambda_0 = 0.5$；折扣因子$\omega = 0.5$；状态不确定性权重$\alpha = 0.5$；转折点$K_0 = 10000$；策略优化采用SAC\cite{Haarnoja2018SAC}算法，学习率为$3 \times 10^{-4}$，批次大小为256。所有实验在5个随机种子上运行，报告归一化分数的均值和标准差。归一化分数采用D4RL标准程序\cite{Fu2020D4RL}，其中0分对应随机策略，100分对应专家策略。
 
-在基线方法方面，本文与以下算法进行对比：（1）基于模型离线强化学习：MOPO\cite{Yu2020MOPO}；（2）无模型离线强化学习：BC（行为克隆）\cite{Torabi2018BC}、CQL\cite{Kumar2020CQL}、IQL\cite{Kostrikov2022IQL}。基线方法的结果引用自各原论文报告的标准评估结果。
+在基线方法方面，本章与以下算法进行对比：（1）基于模型离线强化学习：MOPO\cite{Yu2020MOPO}；（2）无模型离线强化学习：BC（行为克隆）\cite{Torabi2018BC}、CQL\cite{Kumar2020CQL}、IQL\cite{Kostrikov2022IQL}。基线方法的结果引用自各原论文报告的标准评估结果。
 
 
 \subsection{主实验结果}\label{Sec3.7.2}
 
-表\ref{Tab:Chap3_main_results}展示了本文方法与基线方法在D4RL MuJoCo任务上的性能对比。实验结果报告为归一化分数，$\pm$表示5个随机种子的标准差。
+表\ref{Tab:Chap3_main_results}展示了本章方法与基线方法在D4RL MuJoCo任务上的性能对比。实验结果报告为归一化分数，$\pm$表示5个随机种子的标准差。
 
 \begin{table}[htbp]
   \centering
-  \caption{D4RL MuJoCo任务上的性能对比（归一化分数）}
+  \caption{D4RL MuJoCo任务上的性能对比}
   \label{Tab:Chap3_main_results}
   \begin{tabular}{llccccc}
     \toprule
-    数据集 & 环境          & 本文方法                    & MOPO    & BC               & CQL              & IQL     \\
+    数据集           & 环境          & 本章方法                    & MOPO    & BC               & CQL              & IQL     \\
     \midrule
-    随机  & halfcheetah & $\mathbf{37.2 \pm 3.5}$ & $35.4$  & $2.1$            & $19.6$           & -       \\
-    随机  & hopper      & $\mathbf{17.6 \pm 2.2}$ & $11.7$  & $9.8$            & $6.7$            & -       \\
-    随机  & walker2d    & $\mathbf{15.4 \pm 5.1}$ & $13.6$  & $1.6$            & $2.4$            & -       \\
-    中等  & halfcheetah & $\mathbf{50.3 \pm 2.5}$ & $42.3$  & $36.1$           & $49.0$           & $47.4$  \\
-    中等  & hopper      & $\mathbf{72.4 \pm 4.8}$ & $28.0$  & $29.0$           & $66.6$           & $66.3$  \\
-    中等  & walker2d    & $74.5 \pm 5.4$          & $17.8$  & $6.6$            & $\mathbf{83.8}$  & $78.3$  \\
-    专家  & halfcheetah & $\mathbf{93.7 \pm 4.2}$ & $53.3$  & $35.8$           & $90.8$           & $86.7$  \\
-    专家  & hopper      & $104.5 \pm 6.2$         & $108.7$ & $\mathbf{111.9}$ & $106.8$          & $91.5$  \\
-    专家  & walker2d    & $82.4 \pm 4.5$          & $95.6$  & $6.4$            & $\mathbf{109.4}$ & $109.6$ \\
+    random        & halfcheetah & $\mathbf{37.2 \pm 3.5}$ & $35.4$  & $2.1$            & $19.6$           & -       \\
+    random        & hopper      & $\mathbf{17.6 \pm 2.2}$ & $11.7$  & $9.8$            & $6.7$            & -       \\
+    random        & walker2d    & $\mathbf{15.4 \pm 5.1}$ & $13.6$  & $1.6$            & $2.4$            & -       \\
+    medium        & halfcheetah & $\mathbf{50.3 \pm 2.5}$ & $42.3$  & $36.1$           & $49.0$           & $47.4$  \\
+    medium        & hopper      & $\mathbf{72.4 \pm 4.8}$ & $28.0$  & $29.0$           & $66.6$           & $66.3$  \\
+    medium        & walker2d    & $74.5 \pm 5.4$          & $17.8$  & $6.6$            & $\mathbf{83.8}$  & $78.3$  \\
+    medium-expert & halfcheetah & $\mathbf{93.7 \pm 4.2}$ & $53.3$  & $35.8$           & $90.8$           & $86.7$  \\
+    medium-expert & hopper      & $104.5 \pm 6.2$         & $108.7$ & $\mathbf{111.9}$ & $106.8$          & $91.5$  \\
+    medium-expert & walker2d    & $82.4 \pm 4.5$          & $95.6$  & $6.4$            & $\mathbf{109.4}$ & $109.6$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-从表\ref{Tab:Chap3_main_results}可以观察到：本文方法在9个数据集中的6个取得最优或接近最优性能。特别是在数据质量较低的随机数据集上，本文方法相比MOPO取得了显著提升。halfcheetah任务从35.4提升至37.2，hopper任务从11.7提升至17.6，walker2d任务从13.6提升至15.4，这验证了累积状态不确定性度量在数据质量较差时的有效性：当数据集中包含大量低质量样本时，准确评估状态不确定性对于避免分布偏移尤为重要。
+从表\ref{Tab:Chap3_main_results}可以观察到，本章方法在9个数据集中的6个取得最优或接近最优性能。在数据质量较低的随机数据集上，本章方法相比MOPO取得了显著提升：halfcheetah任务从35.4提升至37.2，hopper任务从11.7提升至17.6，walker2d任务从13.6提升至15.4。这验证了累积状态不确定性度量在数据质量较差时的有效性：当数据集中包含大量低质量样本时，准确评估状态不确定性对于避免分布偏移尤为重要。
 
-本文方法在中等数据集上显著优于MOPO。在hopper-medium任务上取得72.4分，而MOPO仅28.0分，提升幅度达44.4个百分点。这表明自适应动态权重机制能够有效促进策略优化：在中等质量数据上，算法需要在探索新区域与保持保守之间取得平衡，自适应权重机制恰好满足这一需求。
+本章方法在中等数据集上显著优于MOPO。在hopper-medium任务上取得72.4分，而MOPO仅28.0分，提升幅度达44.4个百分点。这表明自适应动态权重机制能够有效促进策略优化：在中等质量数据上，算法需要在探索新区域与保持保守之间取得平衡，自适应权重机制恰好满足这一需求。
 
-在专家数据集上，本文方法与免模型方法（CQL、BC）性能相当。专家数据集中包含高质量的演示数据，免模型方法如BC可以直接模仿数据集中的策略，因此也能取得较好效果。本文方法作为基于模型的方法，在这类数据集上仍具有竞争力。然而在walker2d-medium-expert任务上表现相对较弱，原因在于该数据集的数据高度集中在高奖励区域，模型生成的探索数据难以提供额外的价值。
+在专家数据集上，本章方法与无模型方法（CQL、BC）性能相当。专家数据集中包含高质量的演示数据，无模型方法如BC可以直接模仿数据集中的策略，因此也能取得较好效果。本章方法作为基于模型的方法，在这类数据集上仍具有竞争力。然而在walker2d-medium-expert任务上表现相对较弱，原因在于该数据集的数据高度集中在高奖励区域，模型生成的探索数据难以提供额外的价值。
 
 
 \subsection{累积不确定性度量的有效性验证}\label{Sec3.7.3}
@@ -429,13 +420,13 @@
 
 \subsection{消融实验}\label{Sec3.7.4}
 
-为验证算法各组件的有效性，本节设计消融实验，比较以下配置：（1）本文完整方法：同时使用累积状态不确定性和自适应动态权重；（2）仅状态不确定性：使用累积状态不确定性，但不使用自适应权重（固定$\lambda_k = \lambda_0$）；（3）仅自适应权重：使用自适应动态权重，但不考虑累积状态不确定性（$\alpha = 0$）；（4）MOPO基线：不使用上述两种机制，仅使用状态转移不确定性。
+为验证算法各组件的有效性，本节设计消融实验，比较以下配置：（1）完整方法：同时使用累积状态不确定性和自适应动态权重；（2）仅状态不确定性：使用累积状态不确定性，但不使用自适应权重（固定$\lambda_k = \lambda_0$）；（3）仅自适应权重：使用自适应动态权重，但不考虑累积状态不确定性（$\alpha = 0$）；（4）MOPO基线：不使用上述两种机制，仅使用状态转移不确定性。
 
 表\ref{Tab:Chap3_ablation}展示了消融实验结果。
 
 \begin{table}[htbp]
   \centering
-  \caption{消融实验结果（归一化分数）}
+  \caption{消融实验结果}
   \label{Tab:Chap3_ablation}
   \begin{tabular}{llcccc}
     \toprule
@@ -460,7 +451,7 @@
 
 仅使用自适应权重的效果同样不稳定。在部分任务上优于MOPO（如hopper-medium-expert），但在另一些任务上表现较差（如hopper-medium仅28.0分）。这说明仅调整权重而不改进不确定性度量方式，难以充分发挥自适应机制的优势。
 
-值得注意的是，在hopper-medium任务上，完整方法（72.4）略低于MOPO（73.5），可能是由于该任务的特定数据分布使得累积不确定性度量产生了轻微的负面影响。然而完整方法在其他8个任务上的表现均优于或接近最佳，整体性能仍然最优。
+在hopper-medium任务上，完整方法（72.4）略低于MOPO（73.5），这可能与该任务的特定数据分布有关。然而，完整方法在其余8个任务上均取得最优或接近最优性能，整体表现仍然最优。
 
 
 \section{本章小结}\label{Sec3.8}
@@ -469,6 +460,6 @@
 
 在技术实现层面，本章设计了基于概率转移模型的算法框架，提出了累积状态不确定性的形式化定义和递推更新公式，设计了轻量级的不确定性预测网络，并引入Sigmoid函数实现惩罚权重的平滑过渡。在理论分析层面，本章建立了完整的理论框架：（1）证明了累积不确定性的单调性（命题\ref{Prop:Chap3_monotonicity}），表明模型推演步数越多累积不确定性越大；（2）证明了累积不确定性的上界（命题\ref{Prop:Chap3_upper_bound}），保证了算法的数值稳定性；（3）证明了不确定性预测网络的泛化性（命题\ref{Prop:Chap3_generalization}），为使用神经网络预测累积不确定性提供了理论支撑；（4）基于惩罚MDP的期望回报分解引理（引理\ref{Lem:Chap3_decomposition}），证明了自适应权重机制实现探索-保守平衡的数学原理（定理\ref{Thm:Chap3_balance}）；（5）证明了自适应权重相比固定权重的潜在优势（推论\ref{Cor:Chap3_advantage}）。
 
-在实验验证层面，本章在D4RL MuJoCo基准的9个任务上进行了系统评估。主实验结果表明，本文方法在6个任务上取得最优或接近最优性能，特别是在数据质量较差的随机数据集上相比MOPO取得了显著提升，在hopper-medium任务上提升幅度达44.4个百分点。累积不确定性度量的有效性验证实验表明，不确定性预测网络能够准确区分分布内外状态，累积不确定性随推演步数单调增加。消融实验验证了累积状态不确定性和自适应权重机制的各自贡献及其协同效应。
+在实验验证层面，本章在D4RL MuJoCo基准的9个任务上进行了系统评估。主实验结果表明，本章方法在6个任务上取得最优或接近最优性能，在数据质量较差的随机数据集上相比MOPO取得了显著提升，在hopper-medium任务上提升幅度达44.4个百分点。累积不确定性度量的有效性验证实验表明，不确定性预测网络能够准确区分分布内外状态，累积不确定性随推演步数单调增加。消融实验验证了累积状态不确定性和自适应权重机制的各自贡献及其协同效应。
 
 本章提出的方法为纯离线设定下的保守策略优化提供了新的不确定性处理思路，通过更精细的不确定性度量和动态的探索-保守平衡，有效提升了算法性能。然而，该方法仍然局限于纯离线设定，无法主动扩展离线数据的覆盖范围。下一章将针对这一局限，引入在线微调阶段，将“被动惩罚分布外”的思想转变为“主动探索分布外”，通过定向探索策略突破离线数据的边界，实现从离线到在线的高效迁移。
