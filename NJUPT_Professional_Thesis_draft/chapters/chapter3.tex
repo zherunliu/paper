@@ -5,7 +5,7 @@
 
 \section{问题分析与算法动机}\label{Sec3.1}
 
-如第二章所述，基于模型的离线强化学习通过学习环境转移模型并与模型交互来优化策略，具有较高的样本效率。然而，由于离线数据集的分布偏移问题，现有方法通常采用不确定性惩罚机制来约束策略在模型预测可靠的区域内优化。以MOPO\cite{Yu2020MOPO}为代表的方法使用模型预测方差作为不确定性度量，并从奖励中扣除不确定性惩罚项。这些方法虽然有效降低了分布偏移风险，但仍存在根本性局限。
+基于模型的离线强化学习通过学习环境转移模型并与模型交互来优化策略，具有较高的样本效率。然而，由于离线数据集的分布偏移问题，现有方法通常采用不确定性惩罚机制来约束策略在模型预测可靠的区域内优化。
 
 当前方法仅关注状态转移的不确定性，而忽视了状态本身的不确定性。离线强化学习是序列决策过程，不确定性会伴随轨迹传播和累积。现有方法仅约束模型在每一步的预测可靠性，却忽视了状态的历史积累效应。在与环境模型交互生成虚拟轨迹时，随着推演步数的增加，即使每一步的单步转移不确定性较低，累积的预测误差也可能导致当前状态远离离线数据的覆盖范围。
 
@@ -143,6 +143,44 @@
 
 该设计的核心优势在于：使用Sigmoid函数确保权重从低到高的变化是连续平滑的；通过调整$K_0$可以控制从探索到保守的过渡时机，适应不同任务的训练需求；仅引入一个额外的超参数$K_0$，增加的计算开销可忽略不计。
 
+综合以上各小节内容，本章提出的基于自适应不确定性度量的离线强化学习算法的完整流程如算法\ref{Alg:Chap3_AOPO}所示。
+
+\begin{algorithm}[htbp]
+  \caption{基于自适应不确定性度量的离线强化学习算法}
+  \label{Alg:Chap3_AOPO}
+  \begin{algorithmic}[1]
+    \Require 离线数据集$\mathcal{D}_{off}$，基础惩罚系数$\lambda_0$，折扣因子$\omega$，状态不确定性权重$\alpha$，转折点$K_0$，最大探索步数$t_{max}$，训练轮数$K$
+    \Ensure 优化后的策略$\pi_\varphi$
+    \State // 阶段1：训练环境转移模型
+    \State 初始化转移模型$\hat{T}_\theta$
+    \While{转移模型未收敛}
+    \State 从$\mathcal{D}_{off}$采样批次$(s, a, r, s')$
+    \State 根据公式(\ref{Eq:Chap3_model_loss})更新模型：$\theta \leftarrow \theta - \beta_\theta \nabla_\theta \mathcal{L}(\theta)$
+    \EndWhile
+    \State // 阶段2：策略优化
+    \State 初始化策略网络$\pi_\varphi$、Q网络$Q_{\theta_1}, Q_{\theta_2}$、不确定性网络$u_\phi$
+    \For{轮次$k = 1$ to $K$}
+    \State 计算自适应权重$\lambda_k$（公式\ref{Eq:Chap3_adaptive_weight}）
+    \State 从$\mathcal{D}_{off}$采样初始状态$s_0$，初始化$u(s_0) = 0$
+    \For{$t = 0$ to $t_{max}$}
+    \State 根据策略采样动作：$a_t \sim \pi_\varphi(\cdot|s_t)$
+    \State 从转移模型获取：$s_{t+1}, r_t, \Sigma_\theta(s_t, a_t) \sim \hat{T}_\theta(s_t, a_t)$
+    \State 预测累积不确定性：$\hat{u}_{t+1} = u_\phi(s_{t+1})$
+    \State 更新累积不确定性：$u(s_{t+1}) = \omega \cdot u(s_t) + \log(\Sigma_\theta(s_t, a_t) + 1)$
+    \State 计算重塑奖励：$\tilde{r}_t = r_t - \lambda_k \cdot (\alpha \cdot \hat{u}_{t+1} + \Sigma_\theta(s_t, a_t))$
+    \State 将$(s_t, a_t, \tilde{r}_t, s_{t+1}, u(s_t))$加入$\mathcal{D}_{model}$
+    \EndFor
+    \State 从$\mathcal{D}_{off} \cup \mathcal{D}_{model}$采样，通过SAC算法更新$\pi_\varphi$和$Q_\theta$
+    \State 从$\mathcal{D}_{model}$采样，更新不确定性网络$u_\phi$（公式\ref{Eq:Chap3_uncertainty_loss}）
+    \EndFor
+    \State \Return 策略$\pi_\varphi$
+  \end{algorithmic}
+\end{algorithm}
+
+算法的时间复杂度主要由以下部分组成：（1）转移模型训练，复杂度为$O(|\mathcal{D}_{off}| \cdot d_{model})$，其中$d_{model}$为模型参数量；（2）不确定性预测，复杂度为$O(d_\phi)$，其中$d_\phi$为不确定性网络参数量；（3）自适应权重计算，仅需一次Sigmoid函数求值，复杂度为$O(1)$；（4）策略和Q值网络更新，与标准SAC相同。由于不确定性预测网络规模较小，整体计算开销与MOPO\cite{Yu2020MOPO}相当。
+
+算法的空间复杂度主要由转移模型参数和经验回放池占用。转移模型的参数量为$O(d_{model})$，不确定性网络的参数量为$O(d_\phi)$，经验回放池的存储需求与数据集大小成正比。在实际实现中，不确定性网络的额外存储开销可忽略不计。
+
 
 \section{理论分析}\label{Sec3.5}
 
@@ -166,7 +204,7 @@
   \begin{equation}
     u(s_{t+1}) = \omega \cdot u(s_t) + \log(\Sigma_\theta(s_t, a_t) + 1).
   \end{equation}
-  由于$\Sigma_\theta(s_t, a_t)$为协方差矩阵（或其范数），满足$\Sigma_\theta(s_t, a_t) \geq 0$，因此$\log(\Sigma_\theta(s_t, a_t) + 1) \geq \log(1) = 0$。
+  由于$\Sigma_\theta(s_t, a_t)$为协方差矩阵，满足$\Sigma_\theta(s_t, a_t) \geq 0$，因此$\log(\Sigma_\theta(s_t, a_t) + 1) \geq \log(1) = 0$。
 
   立即得到$u(s_{t+1}) \geq \omega \cdot u(s_t)$。
 
@@ -309,53 +347,12 @@
 综合命题\ref{Prop:Chap3_monotonicity}、命题\ref{Prop:Chap3_upper_bound}、命题\ref{Prop:Chap3_generalization}、定理\ref{Thm:Chap3_balance}和推论\ref{Cor:Chap3_advantage}，本文提出的自适应不确定性度量方法具有完整的理论支撑。命题\ref{Prop:Chap3_monotonicity}和命题\ref{Prop:Chap3_upper_bound}分别证明了累积不确定性的单调性和有界性，保证了该度量能够正确反映模型推演步数对状态可靠性的影响，同时不会导致数值不稳定。命题\ref{Prop:Chap3_generalization}证明了不确定性预测网络的泛化能力，为使用神经网络近似累积不确定性函数提供了理论依据。定理\ref{Thm:Chap3_balance}和推论\ref{Cor:Chap3_advantage}从优化目标分解的角度证明了自适应权重机制的合理性，表明Sigmoid形式的动态权重能够实现探索与保守的自适应平衡，并相比固定权重具有潜在优势。
 
 
-\section{算法流程}\label{Sec3.6}
-
-综合以上各节内容，本文提出的基于自适应不确定性度量的离线强化学习算法的完整流程如算法\ref{Alg:Chap3_AOPO}所示。
-
-\begin{algorithm}[htbp]
-  \caption{基于自适应不确定性度量的离线强化学习算法}
-  \label{Alg:Chap3_AOPO}
-  \begin{algorithmic}[1]
-    \Require 离线数据集$\mathcal{D}_{off}$，基础惩罚系数$\lambda_0$，折扣因子$\omega$，状态不确定性权重$\alpha$，转折点$K_0$，最大探索步数$t_{max}$，训练轮数$K$
-    \Ensure 优化后的策略$\pi_\varphi$
-    \State // 阶段1：训练环境转移模型
-    \State 初始化转移模型$\hat{T}_\theta$
-    \While{转移模型未收敛}
-    \State 从$\mathcal{D}_{off}$采样批次$(s, a, r, s')$
-    \State 根据公式(\ref{Eq:Chap3_model_loss})更新模型：$\theta \leftarrow \theta - \beta_\theta \nabla_\theta \mathcal{L}(\theta)$
-    \EndWhile
-    \State // 阶段2：策略优化
-    \State 初始化策略网络$\pi_\varphi$、Q网络$Q_{\theta_1}, Q_{\theta_2}$、不确定性网络$u_\phi$
-    \For{轮次$k = 1$ to $K$}
-    \State 计算自适应权重$\lambda_k$（公式\ref{Eq:Chap3_adaptive_weight}）
-    \State 从$\mathcal{D}_{off}$采样初始状态$s_0$，初始化$u(s_0) = 0$
-    \For{$t = 0$ to $t_{max}$}
-    \State 根据策略采样动作：$a_t \sim \pi_\varphi(\cdot|s_t)$
-    \State 从转移模型获取：$s_{t+1}, r_t, \Sigma_\theta(s_t, a_t) \sim \hat{T}_\theta(s_t, a_t)$
-    \State 预测累积不确定性：$\hat{u}_{t+1} = u_\phi(s_{t+1})$
-    \State 更新累积不确定性：$u(s_{t+1}) = \omega \cdot u(s_t) + \log(\Sigma_\theta(s_t, a_t) + 1)$
-    \State 计算重塑奖励：$\tilde{r}_t = r_t - \lambda_k \cdot (\alpha \cdot \hat{u}_{t+1} + \Sigma_\theta(s_t, a_t))$
-    \State 将$(s_t, a_t, \tilde{r}_t, s_{t+1}, u(s_t))$加入$\mathcal{D}_{model}$
-    \EndFor
-    \State 从$\mathcal{D}_{off} \cup \mathcal{D}_{model}$采样，通过SAC算法更新$\pi_\varphi$和$Q_\theta$
-    \State 从$\mathcal{D}_{model}$采样，更新不确定性网络$u_\phi$（公式\ref{Eq:Chap3_uncertainty_loss}）
-    \EndFor
-    \State \Return 策略$\pi_\varphi$
-  \end{algorithmic}
-\end{algorithm}
-
-算法的时间复杂度主要由以下部分组成：（1）转移模型训练，复杂度为$O(|\mathcal{D}_{off}| \cdot d_{model})$，其中$d_{model}$为模型参数量；（2）不确定性预测，复杂度为$O(d_\phi)$，其中$d_\phi$为不确定性网络参数量；（3）自适应权重计算，仅需一次Sigmoid函数求值，复杂度为$O(1)$；（4）策略和Q值网络更新，与标准SAC相同。由于不确定性预测网络规模较小，整体计算开销与MOPO\cite{Yu2020MOPO}相当。
-
-算法的空间复杂度主要由转移模型参数和经验回放池占用。转移模型的参数量为$O(d_{model})$，不确定性网络的参数量为$O(d_\phi)$，经验回放池的存储需求与数据集大小成正比。在实际实现中，不确定性网络的额外存储开销可忽略不计。
-
-
-\section{实验验证}\label{Sec3.7}
+\section{实验验证}\label{Sec3.6}
 
 本节通过在D4RL基准测试集上的实验验证本章算法的有效性。实验设计旨在回答以下问题：（1）本章算法与现有离线强化学习方法相比表现如何？（2）累积状态不确定性度量是否能有效评估不同状态的不确定性？（3）自适应动态权重机制是否能促进策略优化？
 
 
-\subsection{实验设置}\label{Sec3.7.1}
+\subsection{实验设置}\label{Sec3.6.1}
 
 本节介绍实验所采用的数据集、实现细节和基线方法。
 
@@ -366,7 +363,7 @@
 在基线方法方面，本章与以下算法进行对比：（1）基于模型离线强化学习：MOPO\cite{Yu2020MOPO}；（2）无模型离线强化学习：BC（行为克隆）\cite{Torabi2018BC}、CQL\cite{Kumar2020CQL}、IQL\cite{Kostrikov2022IQL}。基线方法的结果引用自各原论文报告的标准评估结果。
 
 
-\subsection{主实验结果}\label{Sec3.7.2}
+\subsection{主实验结果}\label{Sec3.6.2}
 
 表\ref{Tab:Chap3_main_results}展示了本章方法与基线方法在D4RL MuJoCo任务上的性能对比。实验结果报告为归一化分数，$\pm$表示5个随机种子的标准差。
 
@@ -398,7 +395,7 @@
 在专家数据集上，本章方法与无模型方法（CQL、BC）性能相当。专家数据集中包含高质量的演示数据，无模型方法如BC可以直接模仿数据集中的策略，因此也能取得较好效果。本章方法作为基于模型的方法，在这类数据集上仍具有竞争力。然而在walker2d-medium-expert任务上表现相对较弱，原因在于该数据集的数据高度集中在高奖励区域，模型生成的探索数据难以提供额外的价值。
 
 
-\subsection{累积不确定性度量的有效性验证}\label{Sec3.7.3}
+\subsection{累积不确定性度量的有效性验证}\label{Sec3.6.3}
 
 为验证累积状态不确定性度量的有效性，本节分析不确定性预测网络$u_\phi(s)$对不同来源状态的评估结果。
 
@@ -418,7 +415,7 @@
 不确定性的增长呈现渐进饱和的特点。在$t > 3$后，不确定性的增速逐渐放缓，箱体间的距离缩小。这是由于折扣因子$\omega = 0.5$的作用——早期的不确定性贡献随时间衰减，使累积不确定性趋于稳定。
 
 
-\subsection{消融实验}\label{Sec3.7.4}
+\subsection{消融实验}\label{Sec3.6.4}
 
 为验证算法各组件的有效性，本节设计消融实验，比较以下配置：（1）完整方法：同时使用累积状态不确定性和自适应动态权重；（2）仅状态不确定性：使用累积状态不确定性，但不使用自适应权重（固定$\lambda_k = \lambda_0$）；（3）仅自适应权重：使用自适应动态权重，但不考虑累积状态不确定性（$\alpha = 0$）；（4）MOPO基线：不使用上述两种机制，仅使用状态转移不确定性。
 
@@ -454,7 +451,7 @@
 在hopper-medium任务上，完整方法（72.4）略低于MOPO（73.5），这可能与该任务的特定数据分布有关。然而，完整方法在其余8个任务上均取得最优或接近最优性能，整体表现仍然最优。
 
 
-\section{本章小结}\label{Sec3.8}
+\section{本章小结}\label{Sec3.7}
 
 本章详细介绍了基于自适应不确定性度量的离线强化学习算法。首先分析了现有基于模型离线强化学习方法在不确定性估计方面的局限性，阐明了引入累积状态不确定性度量和自适应动态权重机制的核心思想：累积不确定性度量综合考虑状态转移不确定性和状态本身的累积不确定性，使智能体能够更全面地评估决策风险；自适应权重机制根据策略优化进程动态调节惩罚强度，实现探索与保守的自适应平衡。
 
