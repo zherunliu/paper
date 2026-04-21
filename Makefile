@@ -1,5 +1,13 @@
 .DEFAULT_GOAL=help
 
+.PHONY: build
+build: ## Build NJUPT master's thesis
+	./build.sh njupt
+
+.PHONY: clean
+clean: ## Clean compilation auxiliary files
+	./build.sh clean
+
 .PHONY: chore
 chore: ## Regular maintenance
 	git commit -m "chore: Regular maintenance"
