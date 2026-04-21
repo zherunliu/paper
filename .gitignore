@@ -7,4 +7,5 @@
 **.gz
 **.bbl
 **.blg
+node_modules
 lzr*

@@ -1,23 +1,78 @@
 \begin{denoabbre}
 
-   \noindent {\bf{符号说明：}} \vspace{-13pt} \\
+  \noindent {\bf{符号说明：}} \vspace{-13pt} \\
 
-   \begin{supertabular}{p{4cm}p{9cm}}
-      {\textbf{\heiti{符号}}}  &  {\textbf{\heiti{表示含义}}}    \\
-      ${B_{D}}$  &  多普勒扩展 \\
+  \begin{supertabular}{p{4cm}p{9cm}}
+    {\textbf{\heiti{符号}}}  &  {\textbf{\heiti{表示含义}}}    \\
+    $\mathcal{S}$  &  状态空间 \\
+    $\mathcal{A}$  &  动作空间 \\
+    $T(s'\mid s,a)$  &  状态转移概率函数 \\
+    $r(s,a)$  &  奖励函数 \\
+    $\mu_0$  &  初始状态分布 \\
+    $\gamma$  &  折扣因子 \\
+    $\pi(a\mid s)$  &  策略（在状态$s$下选择动作$a$的概率） \\
+    $V^\pi(s)$  &  状态价值函数 \\
+    $Q^\pi(s,a)$  &  动作价值函数 \\
+    $\rho^\pi(s,a)$  &  折扣状态-动作访问分布 \\
+    $\mathcal{D}_{off}$  &  离线数据集（由行为策略预先收集） \\
+    $\mathcal{D}_{on}$  &  在线交互数据集（微调阶段采集） \\
+    $\mathcal{D}_{model}$  &  模型生成的虚拟轨迹数据集 \\
+    $\hat{T}_\theta(s',r\mid s,a)$  &  学习得到的概率转移模型 \\
+    $\mu_\theta(s,a)$  &  转移模型预测的均值（含$s'$与$r$） \\
+    $\Sigma_\theta(s,a)$  &  转移模型预测的协方差/方差（不确定性来源之一） \\
+    $u_{trans}(s,a)$  &  单步状态转移不确定性度量 \\
+    $u(s)$  &  累积状态不确定性（沿轨迹传播与累积） \\
+    $u_\phi(s)$  &  累积不确定性预测网络的输出 \\
+    $\omega$  &  累积不确定性折扣因子 \\
+    $\tilde{r}(s,a)$  &  引入不确定性惩罚后的重塑奖励 \\
+    $\lambda_0$  &  基础惩罚系数（自适应权重的上界） \\
+    $\lambda_k$  &  第$k$轮训练的自适应惩罚权重 \\
+    $K_0$  &  自适应权重的转折点（Sigmoid中心） \\
+    $\alpha$  &  状态不确定性与转移不确定性的平衡系数（第3章） \\
+    $\alpha_{ent}$  &  熵温度参数（SAC中平衡探索/利用） \\
+    $\text{DisVar}(s,a)$  &  集成模型均值分歧度（认知不确定性度量） \\
+    $u_{on}(s,a)$  &  在线阶段综合不确定性（偶然+认知） \\
+    $c$  &  在线阶段不确定性引导权重（定向探索） \\
+    $c_0$  &  在线阶段初始探索权重 \\
+    $k_0,\,\nu$  &  探索权重衰减中心与衰减速率参数 \\
+    $N$  &  集成模型成员数量 \\
+    $B$  &  在线交互预算（可用交互步数上限） \\
+    $\beta_t$  &  混合重放中在线数据采样比例 \\
 
 
-   \end{supertabular}  \vspace{50pt}
+  \end{supertabular}  \vspace{50pt}
 
 
-   \noindent {\bf{缩略词说明：}} \vspace{-13pt} \\
+  \noindent {\bf{缩略词说明：}} \vspace{-13pt} \\
 
-   \begin{supertabular}{p{2.5cm}p{8.5cm}p{8cm}}
-         {\textbf{\heiti{缩写}}}  &  {\textbf{\heiti{英文全称}}}  &   {\textbf{\heiti{中文译名}}}   \\
-         5G   &  5th Generation  &  第五代移动通信 \\
+  \begin{supertabular}{p{2.5cm}p{8.5cm}p{8cm}}
+    {\textbf{\heiti{缩写}}}  &  {\textbf{\heiti{英文全称}}}  &   {\textbf{\heiti{中文译名}}}   \\
+    RL   &  Reinforcement Learning  &  强化学习 \\
+    Offline RL   &  Offline Reinforcement Learning  &  离线强化学习 \\
+    O2O RL   &  Offline-to-Online Reinforcement Learning  &  离线到在线强化学习 \\
+    MDP   &  Markov Decision Process  &  马尔可夫决策过程 \\
+    SAC   &  Soft Actor-Critic  &  软演员-评论家算法 \\
+    TD3   &  Twin Delayed Deep Deterministic Policy Gradient  &  双延迟深度确定性策略梯度 \\
+    BC   &  Behavior Cloning  &  行为克隆 \\
+    BCQ   &  Batch-Constrained Q-learning  &  批约束Q学习 \\
+    CQL   &  Conservative Q-Learning  &  保守Q学习 \\
+    IQL   &  Implicit Q-Learning  &  隐式Q学习 \\
+    MOPO   &  Model-based Offline Policy Optimization  &  基于模型的离线策略优化 \\
+    MOReL   &  Model-Based Reinforcement Learning  &  基于模型的强化学习方法（悲观MDP路线） \\
+    COMBO   &  Conservative Offline Model-Based Policy Optimization  &  保守的离线基于模型策略优化 \\
+    AWAC   &  Advantage-Weighted Actor-Critic  &  优势加权演员-评论家 \\
+    PETS   &  Probabilistic Ensembles with Trajectory Sampling  &  概率集成与轨迹采样 \\
+    MBPO   &  Model-Based Policy Optimization  &  基于模型的策略优化 \\
+    D4RL   &  Datasets for Deep Data-Driven Reinforcement Learning  &  深度数据驱动强化学习数据集基准 \\
+    MuJoCo   &  Multi-Joint dynamics with Contact  &  多关节动力学仿真平台 \\
+    OOD   &  Out-Of-Distribution  &  分布外（样本/动作） \\
+    KL   &  Kullback--Leibler Divergence  &  KL散度 \\
+    MMD   &  Maximum Mean Discrepancy  &  最大均值差异 \\
+    CVAE   &  Conditional Variational Autoencoder  &  条件变分自编码器 \\
+    t-SNE   &  t-distributed Stochastic Neighbor Embedding  &  t分布随机邻域嵌入（可视化） \\
 
-         
-   \end{supertabular}
+
+  \end{supertabular}
 
 \end{denoabbre}
 
