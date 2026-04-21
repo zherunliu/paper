@@ -1,6 +1,6 @@
 ---
-layout: two-cols
-layoutClass: gap-10
+layout: two-cols-header
+layoutClass: gap-5
 ---
 
 # 研究点一：方法设计
@@ -9,7 +9,7 @@ layoutClass: gap-10
 
 <div class="space-y-5">
   <DeckCard eyebrow="累积不确定性递推" title="沿轨迹记录历史风险">
-    <div class="text-[22px] leading-9 text-slate-900">
+    <div class="text-[20px] leading-9 text-slate-900">
       <Tex formula="u(s') = \omega \cdot u(s) + \log(\Sigma_\theta(s, a) + 1)" />
     </div>
     <div class="mt-3">
@@ -19,7 +19,7 @@ layoutClass: gap-10
   </DeckCard>
 
   <DeckCard eyebrow="奖励重塑" title="同时惩罚单步风险与累积风险">
-    <div class="text-[22px] leading-9 text-slate-900">
+    <div class="text-[20px] leading-9 text-slate-900">
       <Tex formula="\tilde{r} = r - \lambda \cdot (\alpha \cdot u_\phi(s') + \Sigma_\theta(s, a))" />
     </div>
     <div class="mt-3">
@@ -28,7 +28,7 @@ layoutClass: gap-10
   </DeckCard>
 
   <DeckCard eyebrow="动态权重" title="随训练阶段调整保守程度">
-    <div class="text-[22px] leading-9 text-slate-900">
+    <div class="text-[20px] leading-9 text-slate-900">
       <Tex formula="\lambda_k = \frac{\lambda_0}{1 + e^{K_0 - k}}" />
     </div>
     <div class="mt-3">

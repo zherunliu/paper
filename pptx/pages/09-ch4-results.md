@@ -1,5 +1,5 @@
 ---
-layout: two-cols
+layout: two-cols-header
 layoutClass: gap-10
 ---
 

@@ -1,5 +1,5 @@
 ---
-layout: two-cols
+layout: two-cols-header
 layoutClass: gap-10
 ---
 
@@ -30,6 +30,5 @@ layoutClass: gap-10
 ::right::
 
 <div class="space-y-4">
-  <ImagePanel src="/thesis/maze.png" height="200px" />
-  <ImagePanel src="/thesis/totofig.png" height="200px" />
+  <ImagePanel src="/thesis/totofig.png" height="400px" />
 </div>
