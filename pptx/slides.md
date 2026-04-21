@@ -1,6 +1,6 @@
 ---
-theme: default
-title: 不确定性引导的基于模型的离线强化学习方法研究
+theme: seriph
+title: 不确定性引导的有模型离线强化学习方法研究
 info: |
   研究生课题组汇报
 class: text-slate-800

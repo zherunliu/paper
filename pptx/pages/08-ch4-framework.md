@@ -17,7 +17,9 @@ layoutClass: gap-10
 
   <DeckCard eyebrow="探索策略目标" title="用不确定性补知识，用价值约束方向">
     <div class="text-[20px] leading-8 text-slate-900">
-      $\nabla_\varphi J_\pi(\varphi)=\mathbb{E}[\nabla_\varphi \log \pi_\varphi(a|s)\cdot(c \cdot u_{on}(s,a)+Q(s,a))]$
+      <Tex
+        formula="\nabla_\varphi J_\pi(\varphi)=\mathbb{E}[\nabla_\varphi \log \pi_\varphi(a|s)\cdot(c \cdot u_{on}(s,a)+Q(s,a))]"
+      />
     </div>
     <div class="mt-3">
       这一步的关键不是随机探索，而是把有限在线预算集中用于最有信息量的样本。

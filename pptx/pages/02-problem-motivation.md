@@ -24,13 +24,13 @@ layoutClass: gap-10
 ::right::
 
 <DeckCard eyebrow="本次汇报结构" title="围绕两项递进式工作展开">
-  <div class="space-y-2 text-base leading-7 text-slate-700">
+  <div class="space-y-1 text-sm leading-6 text-slate-700">
     <div>1. 问题与动机</div>
     <div>2. 研究点一：chapter3</div>
     <div>3. 研究点二：chapter4</div>
     <div>4. 致谢</div>
   </div>
-  <div class="mt-5 border-t border-slate-200 pt-4 text-sm leading-7 text-slate-600">
+  <div class="mt-4 border-t border-slate-200 pt-3 text-sm leading-6 text-slate-600">
     论文的两项工作不是并列关系，而是递进关系：chapter3 解决如何在离线数据内稳健优化，chapter4 继续解决如何突破离线数据边界。
   </div>
 </DeckCard>

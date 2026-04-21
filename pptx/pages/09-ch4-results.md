@@ -17,7 +17,7 @@ layoutClass: gap-10
 
   <DeckCard eyebrow="动态权重" title="探索与利用平滑切换">
     <div class="text-[20px] leading-8 text-slate-900">
-      $c = c_0 \cdot \frac{1}{1 + e^{(k-k_0)\nu}}$
+      <Tex formula="c = c_0 \cdot \frac{1}{1 + e^{(k-k_0)\nu}}" />
     </div>
     <div class="mt-3">
       在线前期更强调探索，后期逐步转向利用，实现从补知识到提性能的平滑切换。
