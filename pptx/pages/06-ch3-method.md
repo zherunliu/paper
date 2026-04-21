@@ -23,7 +23,7 @@ layoutClass: gap-5
       <Tex formula="\tilde{r} = r - \lambda \cdot (\alpha \cdot u_\phi(s') + \Sigma_\theta(s, a))" />
     </div>
     <div class="mt-3">
-      让策略远离分布外区域，提升离线学习稳定性。
+      促使策略远离分布外区域，提升离线学习稳定性。
     </div>
   </DeckCard>
 
@@ -32,7 +32,7 @@ layoutClass: gap-5
       <Tex formula="\lambda_k = \frac{\lambda_0}{1 + e^{K_0 - k}}" />
     </div>
     <div class="mt-3">
-      前期避免过早过保守，后期增强稳健优化约束。
+      前期避免过度保守导致欠优化，后期逐步增强稳健约束。
     </div>
   </DeckCard>
 </div>
@@ -48,6 +48,6 @@ layoutClass: gap-5
     <div class="border border-slate-200 p-3">在 SAC 框架下更新策略</div>
   </div>
   <div class="mt-4 border-t border-slate-200 pt-3">
-    核心收益是把静态惩罚升级为时序感知、过程自适应的保守优化机制。
+    核心在于将静态惩罚扩展为时序感知、过程自适应的保守优化机制。
   </div>
 </DeckCard>

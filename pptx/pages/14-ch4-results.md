@@ -20,7 +20,7 @@ layoutClass: gap-10
       <Tex formula="c = c_0 \cdot \frac{1}{1 + e^{(k-k_0)\nu}}" />
     </div>
     <div class="mt-3">
-      在线前期更强调探索，后期逐步转向利用，实现从补知识到提性能的平滑切换。
+      在线前期更强调探索，后期逐步转向利用，实现从知识补全到性能提升的平滑切换。
     </div>
   </DeckCard>
 

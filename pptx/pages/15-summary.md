@@ -11,7 +11,7 @@
 </div>
 
 <div class="mt-10 border border-slate-200 p-6 text-center text-xl leading-9 text-slate-800">
-  这篇工作的核心价值在于：
+  本工作的核心价值在于：
   让不确定性既能约束风险，也能驱动探索，
   从而把纯离线学习自然地延伸到离线到在线联合优化。
 </div>
