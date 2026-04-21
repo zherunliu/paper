@@ -30,6 +30,6 @@ layoutClass: gap-10
 ::right::
 
 <div class="space-y-4">
-  <PdfPanel src="/thesis/maze.pdf" height="200px" />
-  <PdfPanel src="/thesis/totofig.pdf" height="200px" />
+  <ImagePanel src="/thesis/maze.png" height="200px" />
+  <ImagePanel src="/thesis/totofig.png" height="200px" />
 </div>

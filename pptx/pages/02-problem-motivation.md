@@ -7,7 +7,7 @@ layoutClass: gap-10
 
 ::left::
 
-<div class="space-y-5 pt-4">
+<div class="space-y-5">
   <DeckCard eyebrow="为什么研究离线强化学习" title="训练过程不依赖在线试错">
     可以直接利用历史数据学习策略，适用于医疗诊断、自动驾驶、机器人控制等高成本、高风险场景。
   </DeckCard>

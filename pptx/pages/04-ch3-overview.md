@@ -26,4 +26,4 @@ layoutClass: gap-10
 
 ::right::
 
-<PdfPanel src="/thesis/framework.pdf" height="430px" caption="框架图展示了离线数据建模、虚拟轨迹生成、不确定性评估与 SAC 策略优化的完整闭环。" />
+<ImagePanel src="/thesis/framework.png" height="430px" caption="框架图展示了离线数据建模、虚拟轨迹生成、不确定性评估与 SAC 策略优化的完整闭环。" />

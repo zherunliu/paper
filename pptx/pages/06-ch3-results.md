@@ -29,4 +29,4 @@ layoutClass: gap-10
 
 ::right::
 
-<PdfPanel src="/thesis/uncertainty_boxplot.pdf" height="420px" caption="随着模型推演步数增加，累积不确定性整体上升，验证了误差沿轨迹累积的建模动机。" />
+<ImagePanel src="/thesis/boxplot.png" height="420px" caption="随着模型推演步数增加，累积不确定性整体上升，验证了误差沿轨迹累积的建模动机。" />

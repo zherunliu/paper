@@ -33,4 +33,4 @@ layoutClass: gap-10
 
 ::right::
 
-<PdfPanel src="/thesis/tsne.pdf" height="420px" caption="模型预测状态与离线状态数据分布的可视化对比，反映在线阶段逐步向高信息区域扩展。" />
+<ImagePanel src="/thesis/tsne.png" height="420px" caption="模型预测状态与离线状态数据分布的可视化对比，反映在线阶段逐步向高信息区域扩展。" />

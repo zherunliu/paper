@@ -40,7 +40,7 @@ withDefaults(defineProps<IProps>(), {
           </p>
         </div>
 
-        <div class="border border-slate-200 p-6">
+        <!-- <div class="border border-slate-200 p-6">
           <div class="text-sm tracking-[0.2em] text-slate-400">汇报信息</div>
           <div class="mt-5 space-y-4 text-[15px] leading-7 text-slate-700">
             <div
@@ -72,7 +72,7 @@ withDefaults(defineProps<IProps>(), {
               <span>{{ date }}</span>
             </div>
           </div>
-        </div>
+        </div> -->
       </div>
 
       <div
