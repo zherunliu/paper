@@ -32,6 +32,9 @@ jobs: # 工作流中的作业
       - name: build
         run: npm run build
 
+      - name: nojekyll
+        run: touch ./dist/.nojekyll
+
       - name: deploy
         uses: peaceiris/actions-gh-pages@v4 # 使用预定义的 peaceiris/actions-gh-pages 动作部署 GitHub Pages
         with:
