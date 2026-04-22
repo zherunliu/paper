@@ -39,7 +39,7 @@ layoutClass: gap-5
 
 ::right::
 
-<DeckCard eyebrow="chapter3 方法链条" title="从模型学习到策略优化">
+<DeckCard eyebrow="方法链条" title="从模型学习到策略优化">
   <div class="space-y-2 text-sm leading-6 text-slate-700">
     <div class="border border-slate-200 p-3">离线数据训练概率转移模型</div>
     <div class="border border-slate-200 p-3">模型 rollout 生成虚拟轨迹</div>

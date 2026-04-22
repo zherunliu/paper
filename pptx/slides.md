@@ -23,61 +23,50 @@ src: ./pages/01-cover.md
 ---
 
 ---
-src: ./pages/02-problem-motivation.md
+src: ./pages/02-intro.md
 ---
 
 ---
-src: ./pages/03-bridge.md
+src: ./pages/03-ch3-framework.md
 ---
 
 ---
-src: ./pages/04-contributions.md
+src: ./pages/04-ch3-method.md
 ---
 
 ---
-src: ./pages/05-ch3-overview.md
+src: ./pages/05-ch3-theory-setup.md
 ---
 
 ---
-src: ./pages/06-ch3-method.md
+src: ./pages/06-ch3-results.md
 ---
 
 ---
-src: ./pages/07-ch3-theory.md
+src: ./pages/07-ch4-transition.md
 ---
 
 ---
-src: ./pages/08-ch3-setup-ablation.md
+src: ./pages/08-ch4-framework.md
 ---
 
 ---
-src: ./pages/09-ch3-results.md
+src: ./pages/09-ch4-online-loop.md
 ---
 
 ---
-src: ./pages/10-ch4-transition.md
+src: ./pages/10-ch4-theory-setup.md
 ---
 
 ---
-src: ./pages/11-ch4-framework.md
+src: ./pages/11-ch4-results.md
 ---
 
 ---
-src: ./pages/12-ch4-online-loop.md
+src: ./pages/12-summary.md
 ---
 
 ---
-src: ./pages/13-ch4-theory-setup.md
+src: ./pages/13-thanks.md
 ---
 
----
-src: ./pages/14-ch4-results.md
----
-
----
-src: ./pages/15-summary.md
----
-
----
-src: ./pages/16-thanks.md
----

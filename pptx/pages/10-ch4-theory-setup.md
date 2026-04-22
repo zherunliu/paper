@@ -35,7 +35,7 @@ layoutClass: gap-10
 
 ::right::
 
-<DeckCard eyebrow="实验设定（chapter4）" title="有限在线预算下的离线到在线微调">
+<DeckCard eyebrow="实验设定" title="有限在线预算下的离线到在线微调">
   <ul class="list-disc pl-5">
     <li>
       离线阶段：集成模型
