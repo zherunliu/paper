@@ -179,10 +179,12 @@
   设$\mathcal{X} \subset \mathbb{R}^d$为状态-动作空间的子集。函数$T: \mathcal{X} \rightarrow \mathbb{R}$称为分段常数函数，若存在$\mathcal{X}$的有限划分$\{R_1, \ldots, R_M\}$，使得$T$在每个区域$R_m$内取常数值$c_m$。记$\text{PC}(\beta, M)$为满足$\sum_{m=1}^{M}|\partial R_m|^\beta < \infty$的分段常数函数集合，其中$|\partial R_m|$表示区域$R_m$边界的测度，$\beta$为边界平滑性参数。
 \end{defn}
 
+上述定义以标量函数为例。在动力学建模中，转移函数通常为向量值映射（例如下一状态与奖励的拼接向量）。在后续分析中，可将每个分量视为一个分段常数函数分别讨论，或将结论理解为对分量级误差的刻画。
+
 基于上述定义，可分析定向探索策略相比均匀采样的收敛速率优势。
 
-\begin{thm}[定向探索的收敛速率优势]\label{Thm:Chap4_convergence}
-  设转移函数$T \in \text{PC}(\beta, M)$为分段常数函数，$\hat{T}$为基于在线数据集$\mathcal{D}_{on}$学习得到的转移模型估计。设状态-动作空间的维度为$d$，分段常数函数的边界区域（即高不确定性区域）的有效维度为$d_B < d$。设总采样数为$n = |\mathcal{D}_{on}|$。则：
+\begin{thm}[定向探索的收敛速率优势（启发式）]\label{Thm:Chap4_convergence}
+  设转移函数$T \in \text{PC}(\beta, M)$为分段常数函数，$\hat{T}$为基于在线数据集$\mathcal{D}_{on}$学习得到的转移模型估计。设状态-动作空间维度为$d$，并假设模型误差主要由函数突变的“边界/变化区域”贡献，该区域可用有效维度$d_B < d$刻画。设总采样数为$n = |\mathcal{D}_{on}|$。在这一理想化设定下，若将学习过程近似为在“有效维度”为$d_{\mathrm{eff}}$的支撑集上进行非参数回归，则模型估计误差可呈现如下典型形式：
   \begin{enumerate}
     \item 均匀采样策略的模型估计误差满足：
           \begin{equation}\label{Eq:Chap4_uniform_bound}
@@ -201,19 +203,23 @@
 
   \textbf{步骤1：误差来源分析。}对于分段常数函数，模型估计误差主要集中在各分段区域的边界附近。在每个常数区域$R_m$内部，只要有足够的样本点，模型可以准确估计常数值$c_m$；而在边界附近，由于相邻区域取值不同，模型需要精确定位边界位置才能减小误差。设边界区域的总测度为$|B|$，其有效维度为$d_B$（通常$d_B = d-1$，即边界是$d$维空间中的$(d-1)$维超曲面）。
 
-  \textbf{步骤2：均匀采样的误差分析。}在均匀采样策略下，$n$个样本均匀分布于$d$维状态-动作空间。根据非参数回归的经典理论\cite{Korostelev1999Minimax}，对于分段常数函数的估计，均匀采样的均方误差由边界定位精度决定。设边界区域的宽度为$h$，则落入边界区域的样本数期望为$n_B \approx n \cdot h$。为使边界区域的误差最小化，需要$h \sim n^{-1/(d+2)}$（经典的偏差-方差权衡），对应的均方误差为：
+  \textbf{步骤2：均匀采样的误差分析。}用一个带宽参数$h$刻画“边界定位/函数变化”的分辨率。对局部常数（或同阶）估计器，典型的偏差-方差权衡可写为
   \begin{equation}
-    \text{MSE}_{\text{uniform}} = O(h^2) = O(n^{-2/(d+2)}).
+    \text{MSE}(h) = O(h^2) + O\!\left(\frac{1}{n h^{d_{\mathrm{eff}}}}\right),
+  \end{equation}
+  其中$h^2$为由有限分辨率带来的近似误差，$1/(n h^{d_{\mathrm{eff}}})$为在有效维度$d_{\mathrm{eff}}$上的样本稀疏导致的方差项（该形式在非参数回归中较为常见，具体常数与正则性条件有关\cite{Korostelev1999Minimax}）。在均匀采样下可取$d_{\mathrm{eff}}=d$，最优带宽满足$h \sim n^{-1/(d+2)}$，从而
+  \begin{equation}
+    \text{MSE}_{\text{uniform}} = O(n^{-2/(d+2)}).
   \end{equation}
 
-  \textbf{步骤3：定向探索的误差分析。}基于不确定性引导的定向探索策略将采样密度集中于高不确定性的边界区域。设探索策略的采样分布$p(s,a)$与不确定性$u(s,a)$成正比，而不确定性在边界区域取值较高。此时，样本主要分布于$d_B$维的边界流形上，有效采样空间的维度从$d$降至$d_B$。应用相同的偏差-方差权衡分析，在边界区域的最优带宽为$h \sim n^{-1/(d_B+2)}$，对应的均方误差为：
+  \textbf{步骤3：定向探索的误差分析。}基于不确定性引导的定向探索策略将采样密度集中于高不确定性的边界/变化区域。若将该区域的有效维度近似为$d_B$，则可令$d_{\mathrm{eff}}=d_B$并重复上述偏差-方差权衡，得到最优带宽$h \sim n^{-1/(d_B+2)}$，从而
   \begin{equation}
-    \text{MSE}_{\text{directed}} = O(h^2) = O(n^{-2/(d_B+2)}).
+    \text{MSE}_{\text{directed}} = O(n^{-2/(d_B+2)}).
   \end{equation}
 
   \textbf{步骤4：收敛速率比较。}比较两种策略的收敛速率指数：均匀采样为$2/(d+2)$，定向探索为$2/(d_B+2)$。由于$d_B < d$，有$d_B + 2 < d + 2$，从而$2/(d_B+2) > 2/(d+2)$。这意味着定向探索策略的MSE以更快的速率收敛至零。
 
-  特别地，当$d_B = d - 1$（边界为超曲面的典型情况）时，收敛速率从$O(n^{-2/(d+2)})$改善至$O(n^{-2/(d+1)})$。例如，在$d=10$维空间中，均匀采样的收敛速率指数为$2/12 \approx 0.167$，而定向探索的收敛速率指数为$2/11 \approx 0.182$，相对提升约9\%。
+  特别地，当$d_B = d - 1$（边界为超曲面的典型情况）时，上式对应的收敛指数从$2/(d+2)$改善为$2/(d+1)$。
 \end{proof}
 
 定理\ref{Thm:Chap4_convergence}的核心洞察是：在高维空间中，均匀采样会在模型已经准确的常数区域内部浪费大量样本，而定向探索将样本集中于模型预测不确定的边界区域，从而更高效地降低整体估计误差。该结果与主动学习中“不确定性采样”策略的理论基础一致\cite{Settles2009Active}，表明基于不确定性引导的样本选择在函数估计任务中具有本质优势。
@@ -235,16 +241,16 @@
   \end{equation}
   作为直接推论，策略在真实环境$M$中的期望回报有下界：
   \begin{equation}\label{Eq:Chap4_lower_bound}
-    \eta_M(\pi) \geq \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - |G^{\pi}_{\hat{M}}(s, a)|].
+    \eta_M(\pi) \geq \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - \gamma |G^{\pi}_{\hat{M}}(s, a)|].
   \end{equation}
 \end{lem}
 
 基于上述引理，可证明以下策略改善定理。
 
 \begin{thm}[策略性能的单调改善]\label{Thm:Chap4_policy_improvement}
-  设$\pi_{off}$、$\hat{T}_{off}$和$\hat{M}_{off}$分别为离线预训练的策略、转移模型和MDP；$\pi_{on}$、$\hat{T}_{on}$和$\hat{M}_{on}$分别为在线微调后的策略、转移模型和MDP。设价值函数$V^{\pi}_M$关于状态具有Lipschitz常数$L_V$。定义策略的期望回报下界为：
+  设$\pi_{off}$、$\hat{T}_{off}$和$\hat{M}_{off}$分别为离线预训练的策略、转移模型和MDP；$\pi_{on}$、$\hat{T}_{on}$和$\hat{M}_{on}$分别为在线微调后的策略、转移模型和MDP。设价值函数有界，即$|V^{\pi}_M(s)| \leq V_{max}$。定义策略的期望回报下界为：
   \begin{equation}
-    \underline{\eta}(\pi, \hat{T}) := \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - \gamma L_V \cdot \epsilon_{\hat{T}}(s,a)],
+    \underline{\eta}(\pi, \hat{T}) := \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - 2\gamma V_{max} \cdot \epsilon_{\hat{T}}(s,a)],
   \end{equation}
   其中$\epsilon_{\hat{T}}(s,a) = \|\hat{T}(\cdot|s,a) - T(\cdot|s,a)\|_{TV}$为转移模型在$(s,a)$处的总变差误差。若满足以下条件：
   \begin{enumerate}
@@ -262,26 +268,27 @@
   \begin{align}
     |G^{\pi}_{\hat{M}}(s, a)| & = |\mathbb{E}_{s'\sim\hat{T}(s,a)}[V^{\pi}_M(s')] - \mathbb{E}_{s'\sim T(s,a)}[V^{\pi}_M(s')]|.
   \end{align}
-  设$V^{\pi}_M$有界，即$|V^{\pi}_M(s)| \leq V_{max}$。由期望差的性质和总变差距离的定义：
+  设$V^{\pi}_M$有界，即$|V^{\pi}_M(s)| \leq V_{max}$。由总变差距离的等价定义，对于任意有界函数$f$有$|\mathbb{E}_{P}[f] - \mathbb{E}_{Q}[f]| \leq 2\|f\|_\infty \|P-Q\|_{TV}$，因此：
   \begin{equation}
-    |G^{\pi}_{\hat{M}}(s, a)| \leq V_{max} \cdot \|\hat{T}(\cdot|s,a) - T(\cdot|s,a)\|_{TV} = V_{max} \cdot \epsilon_{\hat{T}}(s,a).
+    |G^{\pi}_{\hat{M}}(s, a)| \leq 2 V_{max} \cdot \|\hat{T}(\cdot|s,a) - T(\cdot|s,a)\|_{TV} = 2 V_{max} \cdot \epsilon_{\hat{T}}(s,a).
   \end{equation}
   由引理\ref{Lem:Chap4_telescoping}的下界公式(\ref{Eq:Chap4_lower_bound})：
   \begin{equation}
-    \eta_M(\pi) \geq \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - \gamma |G^{\pi}_{\hat{M}}(s, a)|] \geq \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - \gamma V_{max} \cdot \epsilon_{\hat{T}}(s,a)].
+    \eta_M(\pi) \geq \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - \gamma |G^{\pi}_{\hat{M}}(s, a)|] \geq \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - 2\gamma V_{max} \cdot \epsilon_{\hat{T}}(s,a)].
   \end{equation}
 
   \textbf{步骤2：应用条件得到结论。}
   根据下界定义，有：
   \begin{align}
-    \underline{\eta}(\pi_{on}, \hat{T}_{on}) - \underline{\eta}(\pi_{off}, \hat{T}_{off}) & = \mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[r(s,a) - \gamma L_V \cdot \epsilon_{\hat{T}_{on}}(s,a)]           \\
-                                                                                          & \quad - \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[r(s,a) - \gamma L_V \cdot \epsilon_{\hat{T}_{off}}(s,a)].
+    \underline{\eta}(\pi_{on}, \hat{T}_{on}) - \underline{\eta}(\pi_{off}, \hat{T}_{off}) & = \mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[r(s,a) - 2\gamma V_{max} \cdot \epsilon_{\hat{T}_{on}}(s,a)]           \\
+                                                                                          & \quad - \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[r(s,a) - 2\gamma V_{max} \cdot \epsilon_{\hat{T}_{off}}(s,a)].
   \end{align}
   将上式分解为奖励项之差与误差项之差：
   \begin{align}
-     & = \left(\mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[r(s,a)] - \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[r(s,a)]\right)                                                                \\
-     & \quad - \gamma L_V \left(\mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[\epsilon_{\hat{T}_{on}}(s,a)] - \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[\epsilon_{\hat{T}_{off}}(s,a)]\right).
+     & = \left(\mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[r(s,a)] - \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[r(s,a)]\right)                                                                     \\
+     & \quad - 2\gamma V_{max} \left(\mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[\epsilon_{\hat{T}_{on}}(s,a)] - \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[\epsilon_{\hat{T}_{off}}(s,a)]\right).
   \end{align}
+  其中常数因子$2\gamma V_{max}$为正，因此不影响符号判断。
   由条件2，第一项（奖励项之差）非负；由条件1，括号内第二项非正，故整个第二项非负。因此$\underline{\eta}(\pi_{on}, \hat{T}_{on}) - \underline{\eta}(\pi_{off}, \hat{T}_{off}) \geq 0$，定理得证。
 \end{proof}
 定理\ref{Thm:Chap4_policy_improvement}的两个条件对应定向探索策略的两个设计要素：条件1（模型误差降低）由不确定性引导探索保证——探索高不确定性区域可有效补充模型训练数据（定理\ref{Thm:Chap4_convergence}）；条件2（访问高奖励区域）由价值引导探索保证——引入$Q(s,a)$项使策略倾向于访问高动作价值的状态-动作对。两个条件的同时满足解释了为何定向探索目标（公式\ref{Eq:Chap4_exploration_objective}）需要同时考虑不确定性项和价值项。
@@ -290,6 +297,8 @@
 \subsection{理论分析小结}\label{Sec4.4.3}
 
 综合定理\ref{Thm:Chap4_convergence}和定理\ref{Thm:Chap4_policy_improvement}，本文提出的定向探索策略同时优化两个目标：通过探索高不确定性区域提升转移模型的收敛速率；通过探索高动作价值区域保证策略性能的单调改善。定理\ref{Thm:Chap4_convergence}表明，定向探索的收敛速率为$O(n^{-2/(d_B+2)})$，优于均匀采样的$O(n^{-2/(d+2)})$，其中$d_B < d$为边界区域的有效维度。定理\ref{Thm:Chap4_policy_improvement}表明，在模型误差降低和策略访问高奖励区域两个条件下，策略性能的下界单调改善。这两个理论结果共同支撑了算法设计中不确定性项$u(s,a)$和价值项$Q(s,a)$的双重引导机制。
+
+需要说明的是，定理\ref{Thm:Chap4_convergence}给出的幂次形式属于在理想化假设下的“有效维度”分析，旨在解释定向探索提升样本效率的机制；在更一般的动力学函数族与采样/噪声设定下，收敛率的严格形式与常数项通常需要依赖更细致的统计学习理论条件与引用加以刻画。
 
 定理\ref{Thm:Chap4_convergence}基于分段常数函数的假设，而实际环境的转移函数可能更为复杂。分段常数函数可视为对复杂函数的局部近似，该理论结果仍具有指导意义：基于不确定性引导的定向探索在函数变化剧烈（对应高不确定性）的区域采集更多样本，有助于更精确地刻画转移函数的复杂结构。
 

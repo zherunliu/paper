@@ -72,13 +72,13 @@
 
 定义状态$s_t$的累积不确定性为：
 \begin{equation}\label{Eq:Chap3_cumulative_uncertainty}
-  u(s_t) = \mathbb{E}\left[\sum_{t'=0}^{t} \omega^{t-t'} \log\left(\Sigma_\theta(s_{t'}, a_{t'}) + 1\right)\right],
+  u(s_t) = \mathbb{E}\left[\sum_{t'=0}^{t} \omega^{t-t'} \log\left(1 + u_{trans}(s_{t'}, a_{t'})\right)\right],
 \end{equation}
 其中$\omega \in (0, 1]$为折扣因子。该定义的核心思想是：状态$s_t$的不确定性由从初始状态到当前状态的所有状态转移不确定性的折扣和构成。引入折扣因子$\omega$的原因在于：（1）从不同的初始状态都有可能到达$s_t$，因此应给时序上更近的状态赋予更高的权重；（2）早期状态转移的不确定性对当前状态的影响随时间递减。取对数是为了使不确定性度量更加平滑，避免数值不稳定。
 
 基于上述定义，累积状态不确定性可通过递推方式进行高效更新：
 \begin{equation}\label{Eq:Chap3_uncertainty_update}
-  u(s') = \omega \cdot u(s) + \log\left(\Sigma_\theta(s, a) + 1\right),
+  u(s') = \omega \cdot u(s) + \log\left(1 + u_{trans}(s, a)\right),
 \end{equation}
 其中$s'$为从状态$s$执行动作$a$后转移到的下一状态。该递推公式表明：下一状态的累积不确定性由当前状态的累积不确定性（经折扣后）与当前状态转移的不确定性之和构成。相比重新计算完整历史，递推更新的时间复杂度为$O(1)$，适合在线应用。
 
@@ -97,9 +97,9 @@
 
 
 
-基于累积状态不确定性和状态转移不确定性，本文提出综合的奖励重塑机制。当智能体处于状态$s$并执行动作$a$时，通过环境模型获取下一状态$s'$和奖励$r$，同时获取状态转移不确定性$\Sigma_\theta(s, a)$和下一状态的累积不确定性$u_\phi(s')$。重塑后的奖励定义为：
+基于累积状态不确定性和状态转移不确定性，本文提出综合的奖励重塑机制。当智能体处于状态$s$并执行动作$a$时，通过环境模型获取下一状态$s'$和奖励$r$，并计算状态转移不确定性度量$u_{trans}(s,a)=\|\Sigma_\theta(s,a)\|_F$以及下一状态的累积不确定性$u_\phi(s')$。重塑后的奖励定义为：
 \begin{equation}\label{Eq:Chap3_reward_shaping}
-  \tilde{r} = r - \lambda \cdot \left(\alpha \cdot u_\phi(s') + \Sigma_\theta(s, a)\right),
+  \tilde{r} = r - \lambda \cdot \left(\alpha \cdot u_\phi(s') + u_{trans}(s, a)\right),
 \end{equation}
 其中$\lambda$为不确定性惩罚的总体权重，$\alpha$为平衡状态不确定性与转移不确定性的超参数。
 
@@ -156,10 +156,10 @@
     \State 从$\mathcal{D}_{off}$采样初始状态$s_0$，初始化$u(s_0) = 0$
     \For{$t = 0$ to $t_{max}$}
     \State 根据策略采样动作：$a_t \sim \pi_\varphi(\cdot|s_t)$
-    \State 从转移模型获取：$s_{t+1}, r_t, \Sigma_\theta(s_t, a_t) \sim \hat{T}_\theta(s_t, a_t)$
+    \State 从转移模型获取：$s_{t+1}, r_t, \Sigma_\theta(s_t, a_t) \sim \hat{T}_\theta(s_t, a_t)$，并计算$u_{trans}(s_t, a_t) = \|\Sigma_\theta(s_t, a_t)\|_F$
     \State 预测累积不确定性：$\hat{u}_{t+1} = u_\phi(s_{t+1})$
-    \State 更新累积不确定性：$u(s_{t+1}) = \omega \cdot u(s_t) + \log(\Sigma_\theta(s_t, a_t) + 1)$
-    \State 计算重塑奖励：$\tilde{r}_t = r_t - \lambda_k \cdot (\alpha \cdot \hat{u}_{t+1} + \Sigma_\theta(s_t, a_t))$
+    \State 更新累积不确定性：$u(s_{t+1}) = \omega \cdot u(s_t) + \log(1 + u_{trans}(s_t, a_t))$
+    \State 计算重塑奖励：$\tilde{r}_t = r_t - \lambda_k \cdot (\alpha \cdot \hat{u}_{t+1} + u_{trans}(s_t, a_t))$
     \State 将$(s_t, a_t, \tilde{r}_t, s_{t+1}, u(s_t))$加入$\mathcal{D}_{model}$
     \EndFor
     \State 从$\mathcal{D}_{off} \cup \mathcal{D}_{model}$采样，通过SAC算法更新$\pi_\varphi$和$Q_\theta$
@@ -184,7 +184,7 @@
 本节分析累积不确定性度量的基本性质，为算法设计提供理论支撑。
 
 \begin{prop}[累积不确定性的单调性]\label{Prop:Chap3_monotonicity}
-  设$u(s_t)$为状态$s_t$的累积不确定性，按公式(\ref{Eq:Chap3_uncertainty_update})递推更新。若所有状态转移的不确定性非负，即$\forall s, a: \log(\Sigma_\theta(s, a) + 1) \geq 0$（当$\Sigma_\theta(s, a) \geq 0$时自动满足），则累积不确定性沿轨迹单调不减：
+  设$u(s_t)$为状态$s_t$的累积不确定性，按公式(\ref{Eq:Chap3_uncertainty_update})递推更新。由于$u_{trans}(s,a)=\|\Sigma_\theta(s,a)\|_F \geq 0$，故$\log(1+u_{trans}(s,a))\geq 0$，从而累积不确定性沿轨迹单调不减：
   \begin{equation}
     u(s_{t+1}) \geq \omega \cdot u(s_t), \quad \forall t \geq 0.
   \end{equation}
@@ -194,19 +194,19 @@
 \begin{proof}
   由公式(\ref{Eq:Chap3_uncertainty_update})，有
   \begin{equation}
-    u(s_{t+1}) = \omega \cdot u(s_t) + \log(\Sigma_\theta(s_t, a_t) + 1).
+    u(s_{t+1}) = \omega \cdot u(s_t) + \log(1 + u_{trans}(s_t, a_t)).
   \end{equation}
-  由于$\Sigma_\theta(s_t, a_t)$为协方差矩阵，满足$\Sigma_\theta(s_t, a_t) \geq 0$，因此$\log(\Sigma_\theta(s_t, a_t) + 1) \geq \log(1) = 0$。
+  由于$u_{trans}(s_t, a_t)=\|\Sigma_\theta(s_t, a_t)\|_F \geq 0$，因此$\log(1 + u_{trans}(s_t, a_t)) \geq \log(1) = 0$。
 
   立即得到$u(s_{t+1}) \geq \omega \cdot u(s_t)$。
 
-  当$\omega = 1$时，$u(s_{t+1}) = u(s_t) + \log(\Sigma_\theta(s_t, a_t) + 1) \geq u(s_t)$。
+  当$\omega = 1$时，$u(s_{t+1}) = u(s_t) + \log(1 + u_{trans}(s_t, a_t)) \geq u(s_t)$。
 \end{proof}
 
 该命题表明：随着智能体与环境模型交互的推进，累积不确定性倾向于增加。这符合直觉：模型推演步数越多，累积的预测误差越大，状态的可靠性越低。折扣因子$\omega$控制了累积速率，当$\omega < 1$时，早期不确定性的影响逐渐衰减。
 
 \begin{prop}[累积不确定性的上界]\label{Prop:Chap3_upper_bound}
-  设$u_{max} = \max_{s,a} \log(\Sigma_\theta(s, a) + 1)$为单步不确定性的上界。若$\omega < 1$，则经过$t$步后，累积不确定性有上界：
+  设$u_{max} = \max_{s,a} \log(1 + u_{trans}(s, a))$为单步不确定性的上界。若$\omega < 1$，则经过$t$步后，累积不确定性有上界：
   \begin{equation}
     u(s_t) \leq \frac{1 - \omega^t}{1 - \omega} \cdot u_{max}.
   \end{equation}
@@ -216,9 +216,9 @@
 \begin{proof}
   设$u_0 = u(s_0) = 0$（初始状态无累积不确定性）。由递推公式：
   \begin{align}
-    u(s_1) & = \omega \cdot 0 + \log(\Sigma_\theta(s_0, a_0) + 1) \leq u_{max},                             \\
-    u(s_2) & = \omega \cdot u(s_1) + \log(\Sigma_\theta(s_1, a_1) + 1) \leq \omega \cdot u_{max} + u_{max}, \\
-           & \vdots \nonumber                                                                               \\
+    u(s_1) & = \omega \cdot 0 + \log(1 + u_{trans}(s_0, a_0)) \leq u_{max},                                \\
+    u(s_2) & = \omega \cdot u(s_1) + \log(1 + u_{trans}(s_1, a_1)) \leq \omega \cdot u_{max} + u_{max},    \\
+           & \vdots \nonumber                                                                              \\
     u(s_t) & \leq \sum_{i=0}^{t-1} \omega^i \cdot u_{max} = \frac{1 - \omega^t}{1 - \omega} \cdot u_{max}.
   \end{align}
   当$t \to \infty$时，$\omega^t \to 0$，因此$u(s_t) \leq \frac{u_{max}}{1 - \omega}$。
@@ -243,7 +243,7 @@
   \begin{equation}
     |u_\phi(s') - u(s')| \leq L \cdot \delta + |u_\phi(s) - u(s)| + L_u \cdot \delta = (L + L_u) \cdot \delta + |u_\phi(s) - u(s)|.
   \end{equation}
-  由Markov不等式，对于服从$\mathbb{E}[(u_\phi(s) - u(s))^2] \leq \epsilon$的随机变量，以至少$1/2$的概率满足$|u_\phi(s) - u(s)| \leq \sqrt{2\epsilon}$。对于命题假设中满足$|u_\phi(s) - u(s)| \leq \sqrt{\epsilon}$的状态$s$，代入上式即得：
+  对于命题假设中满足$|u_\phi(s) - u(s)| \leq \sqrt{\epsilon}$的状态$s$，代入上式即得：
   \begin{equation}
     |u_\phi(s') - u(s')| \leq \sqrt{\epsilon} + (L + L_u) \cdot \delta.
   \end{equation}
