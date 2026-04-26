@@ -1,0 +1,963 @@
+diff --git a/NJUPT_Professional_Thesis_draft/chapters/chapter3.tex b/NJUPT_Professional_Thesis_draft/chapters/chapter3.tex
+index 404a4d5..e4645aa 100644
+--- a/NJUPT_Professional_Thesis_draft/chapters/chapter3.tex
++++ b/NJUPT_Professional_Thesis_draft/chapters/chapter3.tex
+@@ -174,410 +174,149 @@
+ 
+ \section{理论分析}\label{Sec3.3}
+ 
+-本节从理论角度分析累积状态不确定性度量和自适应动态权重机制的合理性与有效性。考虑到方法章节已给出完整实现细节，本节聚焦于与算法稳定性和目标函数解释直接相关的核心结论：累积不确定性的递推性质与有界性，以及自适应权重在惩罚目标中的阶段性作用。
++本节围绕与方法设计直接相关的两个问题展开。首先，说明累积状态不确定性可以写成递推形式，并在折扣因子$\omega\in(0,1)$下保持有界，从而为使用网络$u_\phi(s)$进行函数逼近提供良构目标。其次，说明在“单步模型误差可由不确定性上界”的标准假设下，本文采用的“即时不确定性 + 下一状态累积不确定性”惩罚可诱导一个保守的代理目标，其设计与奖励重塑公式(\ref{Eq:Chap3_reward_shaping})保持一致。对于折扣型贝尔曼方程的唯一性与压缩性等标准结论，本文直接援引经典动态规划结果，不再重复证明。
+ 
++\subsection{累积不确定性的递推表示与有界性}\label{Sec3.3.1}
+ 
+-\subsection{累积不确定性的性质}\label{Sec3.3.1}
+-
+-本节分析累积不确定性度量的基本性质，为算法设计提供理论支撑。
++为与算法描述保持一致，记单步不确定性项为
++\begin{equation}
++  \ell(s,a) := \log\left(1 + u_{trans}(s, a)\right) \geq 0.
++\end{equation}
++给定策略$\pi$与学习到的转移模型$\hat{T}_\theta$，定义状态$s$的期望累积不确定性为
++\begin{equation}\label{Eq:Chap3_Udef}
++  U^{\pi}(s) = \mathbb{E}_{\substack{a_t \sim \pi(\cdot|s_t) \\ s_{t+1} \sim \hat{T}_\theta(\cdot|s_t, a_t)}}\left[\sum_{t=0}^{\infty} \omega^t \ell(s_t, a_t) \;\middle|\; s_0 = s\right].
++\end{equation}
++该定义与公式(\ref{Eq:Chap3_uncertainty_update})中的递推量在期望意义上一致，也是算法中用$u_\phi(s)$逼近的目标。
+ 
+-\begin{prop}[累积不确定性的折扣累积形式]\label{Prop:Chap3_monotonicity}
+-  设$u(s_t)$为状态$s_t$的累积不确定性，按公式(\ref{Eq:Chap3_uncertainty_update})递推更新。若定义单步不确定性项
+-  \begin{equation}
+-    \ell_t := \log\left(1 + u_{trans}(s_t, a_t)\right) \geq 0,
++\begin{prop}[累积不确定性的递推表示]\label{Prop:Chap3_monotonicity}
++  对任意策略$\pi$，式(\ref{Eq:Chap3_Udef})定义的$U^{\pi}(s)$满足
++  \begin{equation}\label{Eq:Chap3_BellmanEq}
++    U^{\pi}(s) = \mathbb{E}_{\substack{a \sim \pi(\cdot|s) \\ s' \sim \hat{T}_\theta(\cdot|s,a)}}\left[\ell(s,a) + \omega U^{\pi}(s')\right].
+   \end{equation}
+-  则对任意$t\geq 1$，有
++  因而，对一条具体模型推演轨迹，递推量$u_t$可写为
+   \begin{equation}
+-    u(s_t) = \sum_{i=0}^{t-1} \omega^{t-1-i} \ell_i.
++    u_t = \sum_{i=0}^{t-1} \omega^{t-1-i} \ell(s_i, a_i).
+   \end{equation}
+-  因而，当前状态的累积不确定性是过去单步不确定性的折扣加和，其中越早的历史项权重越小。
+ \end{prop}
+ 
+ \begin{proof}
+-  由递推公式$u(s_{t+1}) = \omega u(s_t) + \ell_t$，并结合初始条件$u(s_0)=0$，可直接展开得到
++  由$U^{\pi}$的定义，将无穷级数的首项从其余项中分离，并对后续项使用条件期望的塔式法则，有
+   \begin{align}
+-    u(s_1) & = \ell_0, \\
+-    u(s_2) & = \omega \ell_0 + \ell_1, \\
+-    u(s_3) & = \omega^2 \ell_0 + \omega \ell_1 + \ell_2,
++    U^{\pi}(s)
++      &= \mathbb{E}\left[\ell(s_0,a_0) + \sum_{t=1}^{\infty} \omega^t \ell(s_t,a_t) \;\middle|\; s_0=s\right] \\
++      &= \mathbb{E}\left[\ell(s,a) + \omega U^{\pi}(s')\right].
+   \end{align}
+-  归纳可得
+-  \begin{equation}
+-    u(s_t) = \sum_{i=0}^{t-1} \omega^{t-1-i} \ell_i.
+-  \end{equation}
++  这就得到式(\ref{Eq:Chap3_BellmanEq})。对具体轨迹上的递推公式$u_{t+1} = \omega u_t + \ell(s_t,a_t)$反复展开，即得有限步表示式。
+ \end{proof}
+ 
+-该命题的意义不在于证明$u(s_t)$随时间单调变化，而在于明确其本质是一个折扣累积量：早期推演的不确定性仍会保留，但随着时间推移按$\omega$逐步衰减。这正对应本文希望刻画的“历史风险会继续影响当前状态，但影响强度逐步减弱”的机制。
++命题\ref{Prop:Chap3_monotonicity}表明，累积不确定性并非只由当前一步的模型方差决定，而是对历史风险的折扣汇总。这正解释了为何本文在奖励重塑中不仅保留即时不确定性，还引入下一状态的不确定性估计。
+ 
+-\begin{prop}[累积不确定性的上界]\label{Prop:Chap3_upper_bound}
+-  设$u_{max} = \max_{s,a} \log(1 + u_{trans}(s, a))$为单步不确定性的上界。若$\omega < 1$，则经过$t$步后，累积不确定性有上界：
++\begin{prop}[累积不确定性的有界性]\label{Prop:Chap3_upper_bound}
++  若存在常数$u_{\max} > 0$使得对任意$(s,a)$均有$\ell(s,a) \le u_{\max}$，且$\omega \in (0,1)$，则对任意状态$s$和任意策略$\pi$，有
+   \begin{equation}
+-    u(s_t) \leq \frac{1 - \omega^t}{1 - \omega} \cdot u_{max}.
++    0 \le U^{\pi}(s) \le \frac{u_{\max}}{1-\omega}.
++  \end{equation}
++  此外，对长度为$t$的有限推演轨迹，递推量满足
++  \begin{equation}
++    u_t \le \frac{1-\omega^t}{1-\omega} u_{\max}.
+   \end{equation}
+-  当$t \to \infty$时，$u(s_t) \leq \frac{u_{max}}{1 - \omega}$。
+ \end{prop}
+ 
+ \begin{proof}
+-  设$u_0 = u(s_0) = 0$（初始状态无累积不确定性）。由递推公式：
+-  \begin{align}
+-    u(s_1) & = \omega \cdot 0 + \log(1 + u_{trans}(s_0, a_0)) \leq u_{max},                                \\
+-    u(s_2) & = \omega \cdot u(s_1) + \log(1 + u_{trans}(s_1, a_1)) \leq \omega \cdot u_{max} + u_{max},    \\
+-           & \vdots \nonumber                                                                              \\
+-    u(s_t) & \leq \sum_{i=0}^{t-1} \omega^i \cdot u_{max} = \frac{1 - \omega^t}{1 - \omega} \cdot u_{max}.
+-  \end{align}
+-  当$t \to \infty$时，$\omega^t \to 0$，因此$u(s_t) \leq \frac{u_{max}}{1 - \omega}$。
+-\end{proof}
+-
+-该命题表明：当$\omega < 1$时，累积不确定性存在有限的上界，不会无限增长。这保证了算法的数值稳定性，使得基于累积不确定性的奖励重塑不会导致数值溢出。
+-
+-\subsection{自适应权重的探索-保守平衡}\label{Sec3.3.2}
+-
+-本节分析自适应动态权重机制如何实现探索与保守的平衡。设在训练轮次$k$时，智能体在MDP $M$中的策略为$\pi_k$。为与公式(\ref{Eq:Chap3_reward_shaping})保持一致，定义综合不确定性项
+-\begin{equation}
+-  u(s_t, a_t) := \alpha \cdot u_\phi(s_{t+1}) + \log\left(1 + u_{trans}(s_t, a_t)\right),
+-\end{equation}
+-并据此构造有效MDP $\tilde{M}_k$ 的奖励函数：
+-\begin{equation}
+-  \tilde{r}_k(s, a) = r(s, a) - \lambda_k \cdot u(s, a),
+-\end{equation}
+-其中$u(s, a)$表示一步转移对应的综合不确定性度量。
+-
+-\begin{lem}[惩罚MDP的期望回报分解]\label{Lem:Chap3_decomposition}
+-  设$\eta_M(\pi)$为策略$\pi$在原MDP $M$中的期望回报，$\eta_{\tilde{M}_k}(\pi)$为在惩罚MDP $\tilde{M}_k$中的期望回报。则有：
++  由于$\ell(s,a) \ge 0$，故$U^{\pi}(s) \ge 0$。另一方面，由$\ell(s,a) \le u_{\max}$可得
+   \begin{equation}
+-    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right].
++    U^{\pi}(s) \le \sum_{t=0}^{\infty} \omega^t u_{\max} = \frac{u_{\max}}{1-\omega}.
+   \end{equation}
+-\end{lem}
+-
+-\begin{proof}
+-  由期望回报的定义：
+-  \begin{align}
+-    \eta_{\tilde{M}_k}(\pi) & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \tilde{r}_k(s_t, a_t)\right]                                                                                         \\
+-                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \left(r(s_t, a_t) - \lambda_k \cdot u(s_t, a_t)\right)\right]                                                        \\
+-                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t)\right] - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right] \\
+-                            & = \eta_M(\pi) - \lambda_k \cdot U(\pi),
+-  \end{align}
+-  其中$U(\pi) = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right]$为策略$\pi$的累积不确定性期望。
+-\end{proof}
+-
+-\begin{thm}[自适应权重的平衡性]\label{Thm:Chap3_balance}
+-  在自适应权重机制下，训练轮次$k$时优化的有效目标$\eta_{\tilde{M}_k}(\pi)$可分解为：
++  对有限步递推量，同理有
+   \begin{equation}
+-    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot U(\pi),
++    u_t = \sum_{i=0}^{t-1} \omega^{t-1-i} \ell(s_i,a_i)
++    \le \sum_{i=0}^{t-1} \omega^i u_{\max}
++    = \frac{1-\omega^t}{1-\omega} u_{\max}.
+   \end{equation}
+-  定义归一化权重$w_k = \lambda_k / \lambda_0 = 1/(1 + e^{K_0 - k})$，则：
+-  \begin{enumerate}
+-    \item 当$k \ll K_0$时，$w_k \approx 0$，优化目标近似为$\eta_M(\pi)$，策略偏向最大化原始回报（探索主导）；
+-    \item 当$k \gg K_0$时，$w_k \approx 1$，惩罚项权重达到$\lambda_0$，策略被强约束以避免高不确定性区域（保守主导）；
+-    \item 当$k = K_0$时，$w_k = 0.5$，两种目标权重平衡。
+-  \end{enumerate}
+-\end{thm}
+-
+-\begin{proof}
+-  由引理\ref{Lem:Chap3_decomposition}，有$\eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot U(\pi)$。
+-
+-  由$\lambda_k = \lambda_0 / (1 + e^{K_0 - k})$，定义$w_k = \lambda_k / \lambda_0$，则$w_k = 1/(1 + e^{K_0 - k})$为标准Sigmoid函数。
+-
+-  \textbf{情形1：}当$k \ll K_0$时，$K_0 - k \gg 0$，因此$e^{K_0 - k} \gg 1$，故$w_k = 1/(1 + e^{K_0 - k}) \approx e^{-(K_0-k)} \approx 0$。此时$\lambda_k \approx 0$，优化目标$\eta_{\tilde{M}_k}(\pi) \approx \eta_M(\pi)$，即最大化原始期望回报，策略偏向探索。
+-
+-  \textbf{情形2：}当$k \gg K_0$时，$K_0 - k \ll 0$，因此$e^{K_0 - k} \approx 0$，故$w_k \approx 1$。此时$\lambda_k \approx \lambda_0$，惩罚项达到最大权重，策略被强约束以避免高不确定性区域，偏向保守。
+-
+-  \textbf{情形3：}当$k = K_0$时，$e^{K_0 - k} = e^0 = 1$，故$w_k = 1/(1+1) = 0.5$。此时$\lambda_k = \lambda_0/2$，探索与保守的权重平衡。
+-
+-  Sigmoid函数的单调性（$dw_k/dk > 0$）确保了从探索到保守的平滑过渡。
++  命题得证。
+ \end{proof}
+ 
+-由引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}可知，自适应权重的主要作用是改变训练过程中“回报项”和“不确定性代价项”的相对权重：早期更强调回报提升，后期更强调风险约束。与固定权重相比，该机制提供了更灵活的阶段性调节能力；其实际收益增益由任务数据分布与优化过程共同决定，并在实验部分进一步验证。
++上述有界性说明，只要单步不确定性经过适当的尺度控制，累积状态不确定性就不会随模型推演深度无限增大，因此可作为稳定的风险信号进入奖励重塑和策略优化过程。
+ 
++\subsection{基于累积不确定性的保守代理目标}\label{Sec3.3.2}
+ 
+-\subsection{理论分析小结}\label{Sec3.3.3}
++仅有递推定义还不足以说明奖励重塑的合理性，还需要解释：为何在模型中惩罚累积不确定性能够抑制策略走向高风险区域。为此，以下分析沿用 MOPO~\cite{Yu2020MOPO} 的性能下界框架，并将其与本文的累积不确定性表示结合。
+ 
+-综合命题\ref{Prop:Chap3_monotonicity}、命题\ref{Prop:Chap3_upper_bound}、引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}，本文建立了与方法设计直接对应的理论支撑。命题\ref{Prop:Chap3_monotonicity}和命题\ref{Prop:Chap3_upper_bound}分别说明累积不确定性是历史单步不确定性的折扣累积量，且其数值被有限上界控制，从而能够在保留历史风险信息的同时保持数值稳定。引理\ref{Lem:Chap3_decomposition}将惩罚MDP的目标写成“原始回报减不确定性代价”的形式，定理\ref{Thm:Chap3_balance}进一步说明Sigmoid权重可在训练过程中平滑调节两项的相对作用，从而为自适应机制提供理论解释。
++\begin{assumption}\label{Ass:Chap3_error_bound}
++  存在常数$\beta > 0$，使得对任意$(s,a)$，模型转移误差满足
++  \begin{equation}
++    \|\hat{T}(\cdot|s,a) - T(\cdot|s,a)\|_{\mathrm{TV}} \le \beta \, \ell(s,a).
++  \end{equation}
++\end{assumption}
+ 
+-\subsection{自适应权重的探索-保守平衡}\label{Sec3.3.2}
++假设\ref{Ass:Chap3_error_bound}刻画的是一个校准条件：若某个状态-动作对具有较大的单步不确定性，则对应的模型误差也不会小。该假设并非本文重新证明的结论，而是将不确定性度量用作保守惩罚时所需的前提。
+ 
+-本节分析自适应动态权重机制如何实现探索与保守的平衡。设在训练轮次$k$时，智能体在MDP $M$中的策略为$\pi_k$。为与公式(\ref{Eq:Chap3_reward_shaping})保持一致，定义综合不确定性项
++接下来考虑理论分析中的理想化情形：将奖励重塑中的下一状态系数取为$\alpha = \omega$，并用真实的$U^{\pi}(s')$代替实现中的近似器$u_\phi(s')$。定义一步惩罚项
+ \begin{equation}
+-  u(s_t, a_t) := \alpha \cdot u_\phi(s_{t+1}) + \log\left(1 + u_{trans}(s_t, a_t)\right),
++  \bar{u}^{\pi}(s,a,s') := \ell(s,a) + \omega U^{\pi}(s'),
+ \end{equation}
+-并据此构造有效MDP $\tilde{M}_k$ 的奖励函数：
++以及对应的惩罚奖励
+ \begin{equation}
+-  \tilde{r}_k(s, a) = r(s, a) - \lambda_k \cdot u(s, a),
++  \tilde{r}_{\lambda}(s,a,s') = r(s,a) - \lambda \, \bar{u}^{\pi}(s,a,s').
+ \end{equation}
+-其中$u(s, a)$表示一步转移对应的综合不确定性度量。
++这正是公式(\ref{Eq:Chap3_reward_shaping})在理论分析中的对应形式：实现中以$u_\phi(s')$近似$U^{\pi}(s')$，并将$\alpha$作为可调系数以兼顾理论结构和经验效果。
+ 
+-\begin{lem}[惩罚MDP的期望回报分解]\label{Lem:Chap3_decomposition}
+-  设$\eta_M(\pi)$为策略$\pi$在原MDP $M$中的期望回报，$\eta_{\tilde{M}_k}(\pi)$为在惩罚MDP $\tilde{M}_k$中的期望回报。则有：
++\begin{lem}[惩罚目标的期望回报分解]\label{Lem:Chap3_decomposition}
++  记$\eta_{\hat{M}}(\pi)$为策略$\pi$在估计 MDP $\hat{M}$中的期望回报，$\eta_{\hat{M},\tilde{r}_{\lambda}}(\pi)$为在惩罚奖励$\tilde{r}_{\lambda}$下的期望回报，则有
+   \begin{equation}
+-    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right].
++    \eta_{\hat{M},\tilde{r}_{\lambda}}(\pi)
++    = \eta_{\hat{M}}(\pi)
++    - \lambda \, \mathbb{E}_{\tau \sim (\hat{T},\pi)}\left[\sum_{t=0}^{\infty} \gamma^t \bar{u}^{\pi}(s_t,a_t,s_{t+1})\right].
+   \end{equation}
+ \end{lem}
+ 
+ \begin{proof}
+-  由期望回报的定义：
+-  \begin{align}
+-    \eta_{\tilde{M}_k}(\pi) & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \tilde{r}_k(s_t, a_t)\right]                                                                                         \\
+-                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \left(r(s_t, a_t) - \lambda_k \cdot u(s_t, a_t)\right)\right]                                                        \\
+-                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t)\right] - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right] \\
+-                            & = \eta_M(\pi) - \lambda_k \cdot U(\pi),
+-  \end{align}
+-  其中$U(\pi) = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right]$为策略$\pi$的累积不确定性期望。
++  将$\tilde{r}_{\lambda}(s_t,a_t,s_{t+1}) = r(s_t,a_t) - \lambda \bar{u}^{\pi}(s_t,a_t,s_{t+1})$代入期望回报定义，并利用期望算子的线性性即可得到结论。
+ \end{proof}
+ 
+-\begin{thm}[自适应权重的平衡性]\label{Thm:Chap3_balance}
+-  在自适应权重机制下，训练轮次$k$时优化的有效目标$\eta_{\tilde{M}_k}(\pi)$可分解为：
++\begin{thm}[累积不确定性惩罚的保守性]\label{Thm:Chap3_balance}
++  设真实环境$M$与估计环境$\hat{M}$具有相同奖励函数，且价值函数有界$|V_M^{\pi}(s)| \le V_{\max}$。若假设\ref{Ass:Chap3_error_bound}成立，并取$\lambda \ge 2\gamma V_{\max}\beta$，则对任意策略$\pi$都有
+   \begin{equation}
+-    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot U(\pi),
++    \eta_{\hat{M},\tilde{r}_{\lambda}}(\pi) \le \eta_M(\pi).
+   \end{equation}
+-  定义归一化权重$w_k = \lambda_k / \lambda_0 = 1/(1 + e^{K_0 - k})$，则：
+-  \begin{enumerate}
+-    \item 当$k \ll K_0$时，$w_k \approx 0$，优化目标近似为$\eta_M(\pi)$，策略偏向最大化原始回报（探索主导）；
+-    \item 当$k \gg K_0$时，$w_k \approx 1$，惩罚项权重达到$\lambda_0$，策略被强约束以避免高不确定性区域（保守主导）；
+-    \item 当$k = K_0$时，$w_k = 0.5$，两种目标权重平衡。
+-  \end{enumerate}
++  即在模型中最大化惩罚奖励，对真实回报是保守的。
+ \end{thm}
+ 
+ \begin{proof}
+-  由引理\ref{Lem:Chap3_decomposition}，有$\eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot U(\pi)$。
+-
+-  由$\lambda_k = \lambda_0 / (1 + e^{K_0 - k})$，定义$w_k = \lambda_k / \lambda_0$，则$w_k = 1/(1 + e^{K_0 - k})$为标准Sigmoid函数。
+-
+-  \textbf{情形1：}当$k \ll K_0$时，$K_0 - k \gg 0$，因此$e^{K_0 - k} \gg 1$，故$w_k = 1/(1 + e^{K_0 - k}) \approx e^{-(K_0-k)} \approx 0$。此时$\lambda_k \approx 0$，优化目标$\eta_{\tilde{M}_k}(\pi) \approx \eta_M(\pi)$，即最大化原始期望回报，策略偏向探索。
+-
+-  \textbf{情形2：}当$k \gg K_0$时，$K_0 - k \ll 0$，因此$e^{K_0 - k} \approx 0$，故$w_k \approx 1$。此时$\lambda_k \approx \lambda_0$，惩罚项达到最大权重，策略被强约束以避免高不确定性区域，偏向保守。
+-
+-  \textbf{情形3：}当$k = K_0$时，$e^{K_0 - k} = e^0 = 1$，故$w_k = 1/(1+1) = 0.5$。此时$\lambda_k = \lambda_0/2$，探索与保守的权重平衡。
+-
+-  Sigmoid函数的单调性（$dw_k/dk > 0$）确保了从探索到保守的平滑过渡。
+-\end{proof}
+-
+-由引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}可知，自适应权重的主要作用是改变训练过程中“回报项”和“不确定性代价项”的相对权重：早期更强调回报提升，后期更强调风险约束。与固定权重相比，该机制提供了更灵活的阶段性调节能力；其实际收益增益由任务数据分布与优化过程共同决定，并在实验部分进一步验证。
+-
+-
+-\subsection{理论分析小结}\label{Sec3.3.3}
+-
+-综合命题\ref{Prop:Chap3_monotonicity}、命题\ref{Prop:Chap3_upper_bound}、引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}，本文建立了与方法设计直接对应的理论支撑。命题\ref{Prop:Chap3_monotonicity}和命题\ref{Prop:Chap3_upper_bound}分别说明累积不确定性是历史单步不确定性的折扣累积量，且其数值被有限上界控制，从而能够在保留历史风险信息的同时保持数值稳定。引理\ref{Lem:Chap3_decomposition}将惩罚MDP的目标写成“原始回报减不确定性代价”的形式，定理\ref{Thm:Chap3_balance}进一步说明Sigmoid权重可在训练过程中平滑调节两项的相对作用，从而为自适应机制提供理论解释。
+-
+-
+-\section{理论分析}\label{Sec3.3}
+-
+-本节从理论角度分析累积状态不确定性度量和自适应动态权重机制的合理性与有效性。考虑到方法章节已给出完整实现细节，本节聚焦于与算法稳定性和目标函数解释直接相关的核心结论：累积不确定性的有界性与收敛性，以及自适应权重在策略优化轨迹中引发的相变（Phase Transition）性质。
+-
+-\subsection{累积不确定性的性质}\label{Sec3.3.1}
+-
+-在序列决策中，不确定性沿轨迹传播。根据公式(\ref{Eq:Chap3_uncertainty_update})的递推定义，展开当前状态的累积不确定性，本质上是过去所有单步不确定性 $\ell_t := \log(1 + u_{trans}(s_t, a_t))$ 的折扣加和，即 $u(s_t) = \sum_{i=0}^{t-1} \omega^{t-1-i} \ell_i$。这一形式直观地反映了历史风险的衰减累积机制，但在将该度量引入奖励函数时，必须保证其在无限步推演下的有界性，以防止优化目标发散或发生数值溢出。
+-
+-\begin{prop}[累积不确定性的严格有界性]\label{Prop:Chap3_upper_bound}
+-  设状态转移不确定性存在有限上界，即存在常数 $u_{max} > 0$ 使得对任意 $(s,a)$ 满足 $\log(1 + u_{trans}(s, a)) \leq u_{max}$。若折扣因子 $\omega \in (0, 1)$，则对任意推演步数 $t \geq 1$，累积不确定性 $u(s_t)$ 被严格界定在有限区间内：
++  由 MOPO~\cite{Yu2020MOPO} 中的 Telescoping 引理可得
+   \begin{equation}
+-    u(s_t) \leq \frac{1 - \omega^t}{1 - \omega} \cdot u_{max},
++    \eta_M(\pi)
++    \ge \eta_{\hat{M}}(\pi) - \gamma \, \mathbb{E}_{(s,a) \sim \rho_{\hat{T}}^{\pi}}\left[\left|G_{\hat{M}}^{\pi}(s,a)\right|\right],
+   \end{equation}
+-  且当 $t \to \infty$ 时，存在渐近上界 $\lim_{t \to \infty} u(s_t) \leq \frac{u_{max}}{1 - \omega}$。
+-\end{prop}
+-
+-\begin{proof}
+-  定义单步不确定性项 $\ell_i = \log(1 + u_{trans}(s_i, a_i))$。由于初始状态无历史累积不确定性（$u(s_0) = 0$），根据递推公式经过 $t$ 次迭代可得：
++  其中$G_{\hat{M}}^{\pi}(s,a)$表示模型偏差项。由总变差距离的标准上界，对任意$(s,a)$有
+   \begin{equation}
+-    u(s_t) = \sum_{i=0}^{t-1} \omega^{t-1-i} \ell_i.
++    \left|G_{\hat{M}}^{\pi}(s,a)\right|
++    \le 2V_{\max} \|\hat{T}(\cdot|s,a)-T(\cdot|s,a)\|_{\mathrm{TV}}
++    \le 2V_{\max}\beta \, \ell(s,a).
+   \end{equation}
+-  由于对任意 $i$ 均有 $\ell_i \leq u_{max}$，利用放缩法和等比数列求和公式，有：
+-  \begin{equation}
+-    u(s_t) \leq \sum_{i=0}^{t-1} \omega^i \cdot u_{max} = \frac{1 - \omega^t}{1 - \omega} \cdot u_{max}.
++  代入上式并将占用测度写成轨迹上的折扣求和形式，得到
++  \begin{equation}\label{Eq:Chap3_model_gap}
++    \eta_M(\pi)
++    \ge \eta_{\hat{M}}(\pi)
++    - 2\gamma V_{\max}\beta \, \mathbb{E}_{\tau \sim (\hat{T},\pi)}\left[\sum_{t=0}^{\infty} \gamma^t \ell(s_t,a_t)\right].
+   \end{equation}
+-  由于 $\omega \in (0, 1)$，当 $t \to \infty$ 时，$\omega^t \to 0$。因此累积不确定性的极限存在，且被界定在 $\frac{u_{max}}{1 - \omega}$ 之内。命题得证。
+-\end{proof}
+-
+-该命题从理论上保证了算法的数值稳定性：只要对单步转移方差进行合理的约束（在实际神经网络中由输出层的有界处理保证），引入时间折扣 $\omega < 1$ 就能确保累积风险度量不会随推演深度发散，从而为后续的奖励重塑提供良构的（Well-posed）基础。
+-
+-\subsection{自适应权重的优化轨迹相变}\label{Sec3.3.2}
+-
+-本节分析自适应动态权重机制如何从数学上控制探索与保守的平衡。设在训练轮次 $k$ 时，智能体在原始 MDP $M$ 中的策略为 $\pi$。定义一步转移对应的综合不确定性度量为 $u(s_t, a_t) := \alpha \cdot u_\phi(s_{t+1}) + \log\left(1 + u_{trans}(s_t, a_t)\right)$，构造带有自适应权重的有效惩罚 MDP $\tilde{M}_k$，其奖励函数为 $\tilde{r}_k(s, a) = r(s, a) - \lambda_k \cdot u(s, a)$。
+-
+-\begin{lem}[带惩罚 MDP 的期望回报解耦]\label{Lem:Chap3_decomposition}
+-  设 $\eta_M(\pi)$ 为策略 $\pi$ 在原 MDP $M$ 中的期望回报，$\eta_{\tilde{M}_k}(\pi)$ 为在有效惩罚 MDP $\tilde{M}_k$ 中的期望回报。则有效优化目标可线性解耦为：
+-  \begin{equation}
+-    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right].
+-  \end{equation}
+-\end{lem}
+-
+-\begin{proof}
+-  由期望回报的定义以及期望算子的线性性质可直接展开：
++  由于$U^{\pi}(s) \ge 0$，故$\bar{u}^{\pi}(s_t,a_t,s_{t+1}) = \ell(s_t,a_t) + \omega U^{\pi}(s_{t+1}) \ge \ell(s_t,a_t)$。再由$\lambda \ge 2\gamma V_{\max}\beta$与引理\ref{Lem:Chap3_decomposition}，有
+   \begin{align}
+-    \eta_{\tilde{M}_k}(\pi) & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \left(r(s_t, a_t) - \lambda_k \cdot u(s_t, a_t)\right)\right] \nonumber \\
+-                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t)\right] - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right] \nonumber \\
+-                            & = \eta_M(\pi) - \lambda_k \cdot U(\pi),
++    \eta_{\hat{M},\tilde{r}_{\lambda}}(\pi)
++      &= \eta_{\hat{M}}(\pi) - \lambda \, \mathbb{E}\left[\sum_{t=0}^{\infty} \gamma^t \bar{u}^{\pi}(s_t,a_t,s_{t+1})\right] \\
++      &\le \eta_{\hat{M}}(\pi) - 2\gamma V_{\max}\beta \, \mathbb{E}\left[\sum_{t=0}^{\infty} \gamma^t \ell(s_t,a_t)\right] \\
++      &\le \eta_M(\pi),
+   \end{align}
+-  其中 $U(\pi) = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right]$ 定义为策略 $\pi$ 的期望轨迹不确定性代价。
+-\end{proof}
+-
+-基于上述解耦形式，下面证明动态权重机制在优化轨迹上引发的相变性质。
+-
+-\begin{thm}[自适应目标的演化与相变]\label{Thm:Chap3_balance}
+-  在动态权重 $\lambda_k = \frac{\lambda_0}{1 + e^{K_0 - k}}$ 下，随训练轮次 $k$ 的增加，有效优化目标 $\eta_{\tilde{M}_k}(\pi)$ 展现出如下渐近演化与相变性质：
+-  \begin{enumerate}
+-    \item \textbf{渐近无偏性（探索主导）}：当 $k \to 0$ 且 $K_0 \gg 0$ 时，$\eta_{\tilde{M}_k}(\pi) \to \eta_M(\pi)$，策略优化退化为最大化原始期望回报。
+-    \item \textbf{绝对保守性（惩罚主导）}：当 $k \to \infty$ 时，$\eta_{\tilde{M}_k}(\pi) \to \eta_M(\pi) - \lambda_0 U(\pi)$，策略被强约束于可靠数据流形。
+-    \item \textbf{相变拐点}：$k = K_0$ 是优化轨迹的相变点，此时惩罚项的引入速率达到全局绝对最大值。
+-  \end{enumerate}
+-\end{thm}
+-
+-\begin{proof}
+-  由引理 \ref{Lem:Chap3_decomposition}，$\eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k U(\pi)$。
+-
+-  （1）渐近无偏性：当 $k \to 0$ 时，若超参数 $K_0$ 足够大，则 $e^{K_0 - k} \to e^{K_0} \gg 1$。此时 $\lambda_k \approx 0$，惩罚项消失，目标函数还原为 $\eta_M(\pi)$。
+-
+-  （2）绝对保守性：当 $k \to \infty$ 时，$K_0 - k \to -\infty$，因此 $e^{K_0 - k} \to 0$。此时 $\lambda_k \to \lambda_0$，算法收敛于以 $\lambda_0$ 为固定常数的最悲观保守目标。
+-
+-  （3）相变拐点：考察有效优化目标随训练轮次 $k$ 的演化速率（将 $k$ 视作连续变量）：
+-  \begin{equation}
+-    \frac{\partial \eta_{\tilde{M}_k}(\pi)}{\partial k} = - \frac{\partial \lambda_k}{\partial k} U(\pi).
+-  \end{equation}
+-  对 Sigmoid 权重求导可得：
+-  \begin{equation}
+-    \frac{\partial \lambda_k}{\partial k} = \lambda_0 \cdot \frac{e^{K_0 - k}}{(1 + e^{K_0 - k})^2}.
+-  \end{equation}
+-  为求该变化率的极值，计算二阶导数：
+-  \begin{equation}
+-    \frac{\partial^2 \lambda_k}{\partial k^2} = \lambda_0 \cdot \frac{e^{K_0 - k}(e^{K_0 - k} - 1)}{(1 + e^{K_0 - k})^3}.
+-  \end{equation}
+-  令二阶导数为 0，解得唯一驻点 $e^{K_0 - k} = 1$，即 $k = K_0$。此时一阶导数取得绝对极大值 $\frac{\lambda_0}{4}$。
+-  这在数学上证明了 $k=K_0$ 为惩罚机制引入的拐点。在 $k < K_0$ 时，保守性加速增加；在 $k > K_0$ 后，保守性减速向 $\lambda_0$ 饱和，实现了“探索-保守”目标的平滑且确定的相变。
+-\end{proof}
+-
+-由引理 \ref{Lem:Chap3_decomposition} 和定理 \ref{Thm:Chap3_balance} 可知，自适应权重本质上刻画了一条目标函数从“无偏探索”向“保守利用”平滑过渡的非线性流形。利用 Sigmoid 导数的单峰特性，算法不仅保证了两端行为的正确性，还确保了过渡阶段不会产生震荡，这为实验中算法能兼顾数据利用效率与稳健性提供了理论依据。
+-
+-\section{理论分析}\label{Sec3.3}
+-
+-本章方法的核心设计是引入累积状态不确定性并以其构成奖励惩罚项，同时用自适应权重调节惩罚强度。本节从两个角度为其提供理论支撑：第一，阐明累积不确定性满足一个类似值函数的贝尔曼方程，从而保证其可通过监督学习或时序差分方法逼近；第二，在模型误差被不确定性上界控制的假设下，证明基于累积不确定性的惩罚项能给出真实回报的一个下界，并且该下界比仅惩罚单步不确定性的下界更不保守，从而解释了为什么本章方法能在保持安全性的同时获得更好的策略性能。
+-
+-\subsection{累积不确定性的贝尔曼方程与可学习性}\label{Sec3.3.1}
+-
+-考虑转移模型 \(\hat{T}_\theta\) 和当前策略 \(\pi_\varphi\) 诱导的轨迹分布。对于单步不确定性度量 \(u_{\rm trans}(s,a)=\|\Sigma_\theta(s,a)\|_F\)，定义平滑后的单步不确定性
+-\[
+-\ell(s,a)=\log\!\big(1+u_{\rm trans}(s,a)\big).
+-\]
+-给定折扣因子 \(\omega\in(0,1)\)，状态 \(s\) 的累积不确定性定义为在模型与策略下沿轨迹的期望折扣和
+-\begin{equation}\label{Eq:Chap3_Udef}
+-U^{\pi}(s)=\mathbb{E}_{\substack{a_t\sim\pi(\cdot|s_t)\\ s_{t+1}\sim\hat{T}_\theta(\cdot|s_t,a_t)}}\!\left[\sum_{t=0}^{\infty}\omega^t\,\ell(s_t,a_t)\;\Big|\;s_0=s\right].
+-\end{equation}
+-该定义与算法中的递推公式(\ref{Eq:Chap3_uncertainty_update})在期望意义上一致，但将其显式表达为状态函数 \(U^{\pi}(s)\)。注意，这正是算法中希望用神经网络 \(u_\phi(s)\) 逼近的量。
+-
+-\begin{prop}[累积不确定性的贝尔曼方程]\label{Prop:Chap3_Bellman}
+-给定策略 \(\pi\)，式(\ref{Eq:Chap3_Udef})定义的 \(U^{\pi}\) 是下述贝尔曼方程的唯一解：
+-\begin{equation}\label{Eq:Chap3_BellmanEq}
+-U(s)=\mathbb{E}_{a\sim\pi(\cdot|s)}\Big[\ell(s,a)+\omega\,\mathbb{E}_{s'\sim\hat{T}_\theta(\cdot|s,a)}[U(s')]\Big].
+-\end{equation}
+-且相应的贝尔曼算子 \(\mathcal{T}^{\pi}\) 满足 \(\|\mathcal{T}^{\pi}U_1-\mathcal{T}^{\pi}U_2\|_\infty\le\omega\|U_1-U_2\|_\infty\)，即为 \(\omega\)-压缩映射。
+-\end{prop}
+-
+-\begin{proof}
+-由定义直接展开即可验证贝尔曼方程成立。压缩性来源于：
+-\[
+-|\mathcal{T}^{\pi}U_1(s)-\mathcal{T}^{\pi}U_2(s)|
+-\le\omega\,\mathbb{E}_{a,s'}\big[|U_1(s')-U_2(s')|\big]
+-\le\omega\|U_1-U_2\|_\infty,
+-\]
+-其中不等号用到了期望的凸性与一致范数。
+-\end{proof}
+-
+-命题~\ref{Prop:Chap3_Bellman} 将累积不确定性的估计归结为一个标准的策略评估问题：\(U^{\pi}\) 可看作以 \(\ell(s,a)\) 为“奖励”的 MDP 中的状态价值函数。因此，任何用于值函数逼近的方法均可用于学习 \(U^{\pi}\)。特别地，算法中通过递推公式产生监督信号再最小化均方误差（公式~\ref{Eq:Chap3_uncertainty_loss}）的做法，等价于在模型生成的轨迹上执行贝尔曼残差最小化，其收敛性在表格型或线性函数逼近设定下已有成熟保证，在神经网络逼近下也是当前深度强化学习中的标准实践。这为使用独立的 \(u_\phi(s)\) 网络在线估计累积不确定性提供了坚实的理论依据。
+-
+-\subsection{基于累积不确定性的性能下界}\label{Sec3.3.2}
+-
+-接下来分析将累积不确定性作为惩罚项的优势。我们沿用 MOPO~\cite{Yu2020MOPO} 的分析框架，将单步模型误差与不确定性绑定，并比较单步惩罚与累积惩罚所导出的性能下界。
+-
+-设真实 MDP 为 \(M\)，其转移函数为 \(T\)，奖励函数为 \(r(s,a)\)；估计模型构成 MDP \(\hat{M}\)，转移函数为 \(\hat{T}\)。假设价值函数有界 \(|V^{\pi}_M(s)|\le V_{\max}\)。
+-
+-下列引理源自 MOPO，它将两个 MDP 间期望回报之差表示为模型偏差的期望。
+-
+-\begin{lem}[Telescoping 引理~\cite{Yu2020MOPO}]\label{Lem:Chap3_telescoping}
+-对任意策略 \(\pi\)，定义单步模型偏差
+-\[
+-G^{\pi}_{\hat{M}}(s,a)=\mathbb{E}_{s'\sim\hat{T}(s,a)}[V^{\pi}_M(s')]-\mathbb{E}_{s'\sim T(s,a)}[V^{\pi}_M(s')],
+-\]
+-则有
+-\begin{equation}
+-\eta_{\hat{M}}(\pi)-\eta_M(\pi)=\gamma\,\mathbb{E}_{(s,a)\sim\rho^{\pi}_{\hat{T}}}\big[G^{\pi}_{\hat{M}}(s,a)\big].
+-\end{equation}
+-\end{lem}
+-
+-本节的第一个关键假设与 MOPO 类似：不确定性可以上界模型转移的总变差误差。
+-
+-\begin{assumption}\label{Ass:Chap3_error_bound}
+-存在常数 \(\beta>0\)，使得对任意 \((s,a)\)，有
+-\[
+-D_{\rm TV}\big(T(\cdot|s,a)\,\|\,\hat{T}(\cdot|s,a)\big)\le\beta\,\ell(s,a).
+-\]
+-\end{assumption}
+-
+-假设~\ref{Ass:Chap3_error_bound} 要求模型在数据覆盖不足的区域给出较大的 \(\ell(s,a)\)，这通过优化高斯负对数似然损失在期望意义上成立。接下来，我们将累积不确定性 \(U^{\pi}\) 定义为使用与 MDP 相同的折扣因子 \(\gamma\)（取 \(\omega=\gamma\)）的期望折扣和。这个一致性保证了累积不确定性的折扣结构与回报的折扣结构完全对齐。
+-
+-\begin{thm}[累积不确定性惩罚的性能下界]\label{Thm:Chap3_performance_bound}
+-设累积不确定性 \(U^{\pi}(s)\) 以折扣因子 \(\gamma\) 定义，且假设~\ref{Ass:Chap3_error_bound} 成立。则对任意策略 \(\pi\)，其在真实环境中的期望回报满足
+-\begin{equation}\label{Eq:Chap3_lowerbound}
+-\eta_M(\pi)\ge
+-\mathbb{E}_{s_0\sim\rho_0}\!\Big[\mathbb{E}_{\tau\sim\hat{T},\pi}\big[\sum_{t=0}^{\infty}\gamma^t \big(r(s_t,a_t)-2\gamma V_{\max}\beta\,U^{\pi}(s_t)\big)\big]\Big].
+-\end{equation}
+-进一步，若在模型 \(\hat{M}\) 中使用惩罚奖励 \(\tilde{r}_t=r_t-\lambda U^{\pi}(s_t)\) 并选择 \(\lambda\ge2\gamma V_{\max}\beta\)，则惩罚后的模型期望回报是真实回报的下界：
+-\begin{equation}
+-\eta_{\hat{M},\tilde{r}}(\pi)\le\eta_M(\pi).
+-\end{equation}
+-\end{thm}
+-
+-\begin{proof}
+-由总变差距离的性质，
+-\[
+-|G^{\pi}_{\hat{M}}(s,a)|\le2V_{\max}D_{\rm TV}\big(T(\cdot|s,a),\hat{T}(\cdot|s,a)\big)\le2V_{\max}\beta\,\ell(s,a).
+-\]
+-代入 Lemma~\ref{Lem:Chap3_telescoping} 可得
+-\[
+-\eta_{\hat{M}}(\pi)-\eta_M(\pi)\le2\gamma V_{\max}\beta\,
+-\mathbb{E}_{\tau\sim\hat{T},\pi}\!\left[\sum_{t=0}^{\infty}\gamma^t\ell(s_t,a_t)\right].
+-\]
+-根据 \(U^{\pi}(s)\) 的定义，有
+-\[
+-\mathbb{E}_{\tau\sim\hat{T},\pi}\!\left[\sum_{t=0}^{\infty}\gamma^t\ell(s_t,a_t)\right]
+-=\mathbb{E}_{s_0}\big[U^{\pi}(s_0)\big]
+-=\mathbb{E}_{\tau\sim\hat{T},\pi}\!\left[\sum_{t=0}^{\infty}\gamma^t\big(U^{\pi}(s_t)-\gamma U^{\pi}(s_{t+1})\big)\right].
+-\]
+-利用贝尔曼方程 \(U^{\pi}(s_t)=\ell(s_t,a_t)+\gamma\mathbb{E}[U^{\pi}(s_{t+1})]\)，可得
+-\[
+-\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t\ell(s_t,a_t)\right]
+-=\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)\right]-\gamma\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_{t+1})\right]
+-\le\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)\right].
+-\]
+-因此
+-\[
+-\eta_{\hat{M}}(\pi)-\eta_M(\pi)\le2\gamma V_{\max}\beta\,
+-\mathbb{E}_{\tau\sim\hat{T},\pi}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)\right].
+-\]
+-移项即得式(\ref{Eq:Chap3_lowerbound})。若进一步令 \(\tilde{r}_t=r_t-\lambda U^{\pi}(s_t)\) 且有 \(\lambda\ge2\gamma V_{\max}\beta\)，则
+-\[
+-\eta_{\hat{M},\tilde{r}}(\pi)=\eta_{\hat{M}}(\pi)-\lambda\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)\right]
+-\le\eta_{\hat{M}}(\pi)-2\gamma V_{\max}\beta\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)\right]
+-\le\eta_M(\pi),
+-\]
+-最后一个不等式由上述推导得到。定理得证。
++  其中最后一个不等式由式(\ref{Eq:Chap3_model_gap})得到。
+ \end{proof}
+ 
+-定理~\ref{Thm:Chap3_performance_bound} 的直接意义是：只要用足够大的 \(\lambda\) 惩罚累积不确定性，在模型上优化的策略的真实性能就不会低于其伪回报。这为使用累积不确定性作为惩罚信号提供了安全保证。
+-
+-更重要的是，与仅惩罚单步不确定性 \(\ell(s,a)\) 的 MOPO 相比，累积惩罚的下界可能更紧。直观上，单步惩罚对应的下界为
+-\[
+-\eta_M(\pi)\ge\mathbb{E}\!\left[\sum\gamma^t\big(r_t-2\gamma V_{\max}\beta\,\ell(s_t,a_t)\big)\right],
+-\]
+-其惩罚项的期望值为 \(\mathbb{E}[\sum\gamma^t\ell(s_t,a_t)]\)。而累积惩罚下界的惩罚项期望为 \(\mathbb{E}[\sum\gamma^t U^{\pi}(s_t)]\)。由于 \(U^{\pi}(s_t)\) 是对未来 \(\ell\) 的折扣期望，通常有 \(U^{\pi}(s_t)\ge\ell(s_t,a_t)\)，但折扣因子使远期 \(\ell\) 的权重衰减，使得 \(\sum\gamma^t U^{\pi}(s_t)\) 与 \(\sum\gamma^t\ell(s_t,a_t)\) 的差异受到限制。事实上，展开可得
+-\[
+-\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)=\frac{1}{1-\gamma}\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t\ell(s_t,a_t)\right]-\cdots,
+-\]
+-表明累积惩罚虽然没有放松下界的理论最大幅度，但它通过函数 \(U^{\pi}\) 将惩罚前置到状态评估上，使得算法可以用一个可学习的网络 \(u_\phi(s)\) 替代对整条轨迹历史的手工求和，这在实际中提供了更平滑、更稳定的惩罚信号，同时仍维持住性能下界的保证。因此，定理~\ref{Thm:Chap3_performance_bound} 为第三章以 \(u_\phi(s')\) 参与奖励重塑的设计提供了理论正当性。
++定理\ref{Thm:Chap3_balance}给出的不是“本文算法必然优于基线”的结论，而是一个设计合理性说明：当不确定性能较好地刻画模型误差时，使用“即时不确定性 + 下一状态累积不确定性”作为惩罚项，会将模型中的优化目标压低为真实回报的保守代理目标，从而抑制策略利用模型误差。
+ 
+-\subsection{自适应权重的分阶段解释}
++对于动态权重$\lambda_k$，本文不再单独给出形式化定理。其作用可以直接由上式解释：训练早期取较小的$\lambda_k$，允许策略更充分地利用模型数据提升回报；训练后期随着$\lambda_k$逐步接近$\lambda_0$，保守惩罚被逐渐加强，策略更新重新向模型更可靠的区域收缩。换言之，自适应权重并不改变保守性推导本身，而是在优化过程中动态调节这一保守机制的激活强度。
+ 
+-在上述下界中，惩罚系数 \(\lambda\) 控制风险约束的强度。本文采用 Sigmoid 形状的自适应权重 \(\lambda_k=\lambda_0/(1+e^{K_0-k})\)，其数学性质已知，无需重新证明。这里仅从理论角度指出其作用：在训练早期，\(\lambda_k<\lambda_0\) 使惩罚低于下界要求的阈值，此时算法暂时牺牲部分安全性以换取探索自由度；在训练后期，\(\lambda_k\approx\lambda_0\) 满足（或接近）下界条件，开始对风险区域施加充分惩罚。这种分阶段设计可理解为一种“退火式”的安全探索策略——先放宽约束促进数据利用，待模型和策略趋于稳定后再收紧约束以保证最终策略的稳健性。第\ref{Sec3.4}节的消融实验将验证该机制的实际收益。
+-
+-\subsection{理论分析小结}
++\subsection{理论分析小结}\label{Sec3.3.3}
+ 
+-本章的理论贡献可归纳为两点：第一，将累积不确定性诠释为策略评估问题，证明其满足压缩贝尔曼方程，从而保障了用神经网络对其进行监督学习的可行性；第二，在模型误差与不确定性成比例的假设下，证明了基于累积不确定性的惩罚奖励能够形成真实回报的下界，且该下界相对单步惩罚具有结构上的优势，为算法设计提供了比传统方法更灵活的安全保证。自适应权重则作为该下界的时序调节器，进一步提升了算法的实用效能。
++本节从与方法设计最直接相关的角度整理了第三章的理论依据。命题\ref{Prop:Chap3_monotonicity}和命题\ref{Prop:Chap3_upper_bound}说明，累积状态不确定性可以理解为历史单步不确定性的折扣汇总，并且在$\omega \in (0,1)$时保持有界，因此能够作为稳定的状态风险表征。引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}进一步说明，在单步模型误差可由不确定性上界的条件下，本文采用的奖励重塑形式可以诱导一个对真实回报保守的代理目标。结合动态权重的阶段性调节机制，第三章方法在“提升回报”和“抑制模型偏差利用”之间形成了清晰的理论闭环。
+ 
+ \section{实验验证}\label{Sec3.4}
+ 
+@@ -642,7 +381,7 @@ D_{\rm TV}\big(T(\cdot|s,a)\,\|\,\hat{T}(\cdot|s,a)\big)\le\beta\,\ell(s,a).
+ 
+ 从图\ref{Fig:Chap3_uncertainty_evaluation}可以观察到清晰的规律：离线数据集中的状态（$t=0$）具有最低的不确定性。这些状态直接从真实环境中采集，未经过模型推演，因此累积不确定性被初始化为0，预测值也相应较低，验证了不确定性预测网络能够正确识别分布内状态。
+ 
+-随着推演步数$t$的增加，状态的累积不确定性呈现明显的上升趋势。$t=1$时的中位数约为0.3，$t=3$时增至约0.7，$t=5$时达到约1.0，符合命题\ref{Prop:Chap3_monotonicity}的理论预期：模型推演步数越多，累积的预测误差越大，状态逐渐偏离离线数据的覆盖范围。
++随着推演步数$t$的增加，状态的累积不确定性呈现明显的上升趋势。$t=1$时的中位数约为0.3，$t=3$时增至约0.7，$t=5$时达到约1.0。这与命题\ref{Prop:Chap3_monotonicity}中的折扣累积表示一致：额外的模型推演会不断引入新的单步不确定性项，因此平均累积风险会随推演深度增加而整体升高，状态也逐步偏离离线数据的高密度覆盖区域。
+ 
+ 不确定性的增长呈现渐进饱和的特点。在$t > 3$后，不确定性的增速逐渐放缓，箱体间的距离缩小。这是由于折扣因子$\omega = 0.5$的作用——早期的不确定性贡献随时间衰减，使累积不确定性趋于稳定。
+ 
+@@ -687,8 +426,8 @@ D_{\rm TV}\big(T(\cdot|s,a)\,\|\,\hat{T}(\cdot|s,a)\big)\le\beta\,\ell(s,a).
+ 
+ 本章详细介绍了基于自适应不确定性度量的离线强化学习算法。首先分析了现有基于模型离线强化学习方法在不确定性估计方面的局限性，阐明了引入累积状态不确定性度量和自适应动态权重机制的核心思想：累积不确定性度量综合考虑状态转移不确定性和状态本身的累积不确定性，使智能体能够更全面地评估决策风险；自适应权重机制根据策略优化进程动态调节惩罚强度，实现探索与保守的自适应平衡。
+ 
+-在技术实现层面，本章设计了基于概率转移模型的算法框架，提出了累积状态不确定性的形式化定义和递推更新公式，设计了轻量级的不确定性预测网络，并引入Sigmoid函数实现惩罚权重的平滑过渡。在理论分析层面，本章聚焦与方法直接对应的核心结论：（1）给出累积不确定性的递推下界性质（命题\ref{Prop:Chap3_monotonicity}），说明该度量在多步推演中能够持续携带历史风险信息；（2）给出累积不确定性的上界（命题\ref{Prop:Chap3_upper_bound}），保证算法的数值稳定性；（3）通过惩罚MDP期望回报分解（引理\ref{Lem:Chap3_decomposition}）和自适应权重平衡性分析（定理\ref{Thm:Chap3_balance}），解释了动态权重在训练不同时期调节“回报提升—风险约束”权衡的作用机制。
++在技术实现层面，本章设计了基于概率转移模型的算法框架，提出了累积状态不确定性的形式化定义和递推更新公式，设计了轻量级的不确定性预测网络，并引入Sigmoid函数实现惩罚权重的平滑过渡。在理论分析层面，本章聚焦与方法直接对应的核心结论：（1）通过命题\ref{Prop:Chap3_monotonicity}和命题\ref{Prop:Chap3_upper_bound}说明累积不确定性是历史单步风险的折扣汇总，且在$\omega \in (0,1)$时保持有界，从而保证该度量既能携带历史风险信息，又具有数值稳定性；（2）通过引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}说明，在模型误差可由不确定性上界的条件下，本文的奖励重塑形式能够诱导一个对真实回报保守的代理目标；（3）从阶段性调节的角度解释了动态权重在训练早期放宽约束、后期强化保守性的作用。
+ 
+-在实验验证层面，本章在D4RL MuJoCo基准的9个任务上进行了系统评估。主实验结果表明，本章方法在6个任务上取得最优或接近最优性能，在数据质量较差的随机数据集上相比MOPO取得了显著提升，在hopper-medium任务上提升幅度达44.4个百分点。累积不确定性度量的有效性验证实验表明，不确定性预测网络能够准确区分分布内外状态，累积不确定性随推演步数单调增加。消融实验验证了累积状态不确定性和自适应权重机制的各自贡献及其协同效应。
++在实验验证层面，本章在D4RL MuJoCo基准的9个任务上进行了系统评估。主实验结果表明，本章方法在6个任务上取得最优或接近最优性能，在数据质量较差的随机数据集上相比MOPO取得了显著提升，在hopper-medium任务上提升幅度达44.4个百分点。累积不确定性度量的有效性验证实验表明，不确定性预测网络能够准确区分分布内外状态，且其估计值会随模型推演深度增加而整体升高。消融实验验证了累积状态不确定性和自适应权重机制的各自贡献及其协同效应。
+ 
+ 本章提出的方法为纯离线设定下的保守策略优化提供了新的不确定性处理思路，通过更精细的不确定性度量和动态的探索-保守平衡，有效提升了算法性能。然而，该方法仍然局限于纯离线设定，无法主动扩展离线数据的覆盖范围。下一章将针对这一局限，引入在线微调阶段，将“被动惩罚分布外”的思想转变为“主动探索分布外”，通过定向探索策略突破离线数据的边界，实现从离线到在线的高效迁移。
+diff --git a/NJUPT_Professional_Thesis_draft/chapters/chapter4.tex b/NJUPT_Professional_Thesis_draft/chapters/chapter4.tex
+index 1a51773..ab6ba43 100644
+--- a/NJUPT_Professional_Thesis_draft/chapters/chapter4.tex
++++ b/NJUPT_Professional_Thesis_draft/chapters/chapter4.tex
+@@ -176,307 +176,149 @@
+ 
+ \section{理论分析}\label{Sec4.3}
+ 
+-本节从理论角度分析定向探索策略的优势。首先证明基于不确定性引导的定向探索相比均匀采样可实现更优的模型收敛速率；随后证明在高动作价值区域采集样本可保证策略性能的单调提升。
+-
++本节从理论角度分析定向探索策略的优势。首先在理想化的分段常数函数与有效维度假设下，论证基于不确定性引导的定向探索相比均匀采样可实现更优的模型收敛速率；然后基于性能下界分析，说明当在线样本同时降低模型误差并引导策略进入更高奖励区域时，策略性能的下界将单调提升。两部分分析分别对应定向探索目标中的不确定性项$u_{\mathrm{on}}(s,a)$与价值项$Q(s,a)$，并与第三章“利用不确定性保持保守性”的思路形成呼应。
+ 
+ \subsection{定向探索的收敛速率分析}\label{Sec4.3.1}
+ 
+-本节基于分段常数函数假设分析定向探索策略的收敛速率优势。在实际应用中，许多物理系统的动力学具有分段常数特性。例如，机器人控制任务中，不同操作模式（如空载与负载）对应不同的动力学参数；自动驾驶场景中，不同路面条件（如干燥与湿滑）导致车辆响应特性的显著差异。这些场景的转移函数可近似为在不同状态-动作区域内取不同常数值的分段常数函数。
++为阐明定向探索的样本效率优势，我们在一组理想化假设下进行分析：
++\begin{enumerate}
++  \item \textbf{分段常数转移函数}：真实转移函数$T$在状态-动作空间上为分段常数，即在有限个区域内部取常数值，仅在区域边界发生突变；
++  \item \textbf{局部常数估计器}：模型估计采用局部常数回归（或具有同等偏差-方差阶的估计器），其收敛速率由边界区域的有效维度决定；
++  \item \textbf{不确定性能够识别变化区域}：不确定性度量$u_{\mathrm{on}}(s,a)$能够较好地识别预测不可靠的区域，即函数突变的边界附近；
++  \item \textbf{定向采样集中}：基于不确定性的采样策略会将更多样本集中于上述高不确定性区域。
++\end{enumerate}
++这些假设在一般环境中并不严格成立，因此以下结果应理解为机制分析，而不是对一般非线性动力学模型的严格最优率证明。
+ 
+ \begin{defn}[分段常数函数]\label{Def:Chap4_piecewise_constant}
+-  设$\mathcal{X} \subset \mathbb{R}^d$为状态-动作空间的子集。函数$T: \mathcal{X} \rightarrow \mathbb{R}$称为分段常数函数，若存在$\mathcal{X}$的有限划分$\{R_1, \ldots, R_M\}$，使得$T$在每个区域$R_m$内取常数值$c_m$。记$\text{PC}(\beta, M)$为满足$\sum_{m=1}^{M}|\partial R_m|^\beta < \infty$的分段常数函数集合，其中$|\partial R_m|$表示区域$R_m$边界的测度，$\beta$为边界平滑性参数。
++  设$\mathcal{X}\subset\mathbb{R}^d$为状态-动作空间的子集。函数$T:\mathcal{X}\to\mathbb{R}$称为分段常数函数，若存在$\mathcal{X}$的有限划分$\{R_1,\ldots,R_M\}$，使得$T$在每个区域$R_m$内取常数值$c_m$。记$\mathrm{PC}(\beta,M)$为满足$\sum_{m=1}^{M}|\partial R_m|^\beta < \infty$的分段常数函数集合，其中$|\partial R_m|$表示区域边界的测度，$\beta$为边界光滑性参数。
+ \end{defn}
+ 
+-上述定义以标量函数为例。在动力学建模中，转移函数通常为向量值映射（例如下一状态与奖励的拼接向量）。在后续分析中，可将每个分量视为一个分段常数函数分别讨论，或将结论理解为对分量级误差的刻画。
+-
+-基于上述定义，可分析定向探索策略相比均匀采样的收敛速率优势。
+-
+-\begin{thm}[定向探索的收敛速率优势（启发式）]\label{Thm:Chap4_convergence}
+-  设转移函数$T \in \text{PC}(\beta, M)$为分段常数函数，$\hat{T}$为基于在线数据集$\mathcal{D}_{on}$学习得到的转移模型估计。设状态-动作空间维度为$d$，并假设模型误差主要由函数突变的“边界/变化区域”贡献，该区域可用有效维度$d_B < d$刻画。设总采样数为$n = |\mathcal{D}_{on}|$。在这一理想化设定下，若将学习过程近似为在“有效维度”为$d_{\mathrm{eff}}$的支撑集上进行非参数回归，则模型估计误差可呈现如下典型形式：
++\begin{thm}[定向探索的收敛速率优势（理想化分析）]\label{Thm:Chap4_convergence}
++  在上述假设下，设状态-动作空间维度为$d$，边界区域的有效维度为$d_B < d$（典型情形$d_B = d-1$），总采样数为$n$。则模型估计的均方误差满足：
+   \begin{enumerate}
+-    \item 均匀采样策略的模型估计误差满足：
+-          \begin{equation}\label{Eq:Chap4_uniform_bound}
+-            \text{MSE}_{\text{uniform}} = O(n^{-2/(d+2)}),
+-          \end{equation}
+-    \item 基于不确定性引导的定向探索策略的模型估计误差满足：
+-          \begin{equation}\label{Eq:Chap4_convergence_bound}
+-            \text{MSE}_{\text{directed}} = O(n^{-2/(d_B+2)}),
+-          \end{equation}
++    \item 均匀采样策略：$\mathrm{MSE}_{\mathrm{uniform}} = O\big(n^{-2/(d+2)}\big)$；
++    \item 基于不确定性引导的定向探索策略：$\mathrm{MSE}_{\mathrm{directed}} = O\big(n^{-2/(d_B+2)}\big)$。
+   \end{enumerate}
+-  由于$d_B < d$，有$2/(d_B+2) > 2/(d+2)$，因此定向探索策略具有更快的收敛速率。
++  由于$d_B < d$，有$2/(d_B+2) > 2/(d+2)$，因此定向探索策略具有更快的误差收敛速率。
+ \end{thm}
+ 
+ \begin{proof}
+-  设模型估计为$\hat{T}(s, a)$，真实转移函数为$T(s,a)$。模型的均方误差（MSE）定义为$\text{MSE} = \mathbb{E}[(\hat{T}(s, a) - T(s, a))^2]$。
++  对于分段常数函数，模型估计误差主要集中在各分段区域的边界附近。在常数区域内部，只要样本足够，局部常数估计器可以稳定恢复常数值；真正困难的是边界定位。因此，可将误差分析集中到“有效维度”为$d_{\mathrm{eff}}$的变化区域上。
+ 
+-  \textbf{步骤1：误差来源分析。}对于分段常数函数，模型估计误差主要集中在各分段区域的边界附近。在每个常数区域$R_m$内部，只要有足够的样本点，模型可以准确估计常数值$c_m$；而在边界附近，由于相邻区域取值不同，模型需要精确定位边界位置才能减小误差。设边界区域的总测度为$|B|$，其有效维度为$d_B$（通常$d_B = d-1$，即边界是$d$维空间中的$(d-1)$维超曲面）。
+-
+-  \textbf{步骤2：均匀采样的误差分析。}用一个带宽参数$h$刻画“边界定位/函数变化”的分辨率。对局部常数（或同阶）估计器，典型的偏差-方差权衡可写为
+-  \begin{equation}
+-    \text{MSE}(h) = O(h^2) + O\!\left(\frac{1}{n h^{d_{\mathrm{eff}}}}\right),
++  对局部常数估计器，典型的偏差-方差权衡可写为
++  \begin{equation}\label{Eq:Chap4_bias_variance}
++    \mathrm{MSE}(h) = O(h^2) + O\!\left(\frac{1}{n h^{d_{\mathrm{eff}}}}\right),
+   \end{equation}
+-  其中$h^2$为由有限分辨率带来的近似误差，$1/(n h^{d_{\mathrm{eff}}})$为在有效维度$d_{\mathrm{eff}}$上的样本稀疏导致的方差项（该形式在非参数回归中较为常见，具体常数与正则性条件有关\cite{Korostelev1999Minimax}）。在均匀采样下可取$d_{\mathrm{eff}}=d$，最优带宽满足$h \sim n^{-1/(d+2)}$，从而
++  其中$h^2$对应有限分辨率带来的近似误差，$1/(n h^{d_{\mathrm{eff}}})$对应有效维度上的样本稀疏误差。该形式是非参数回归中的标准结果，具体常数依赖于估计器与正则性条件\cite{Korostelev1999Minimax}。
++
++  对均匀采样，变化区域与整体空间共享同一采样分辨率，可取$d_{\mathrm{eff}} = d$，由式(\ref{Eq:Chap4_bias_variance})得到最优带宽$h \sim n^{-1/(d+2)}$，因此
+   \begin{equation}
+-    \text{MSE}_{\text{uniform}} = O(n^{-2/(d+2)}).
++    \mathrm{MSE}_{\mathrm{uniform}} = O\big(n^{-2/(d+2)}\big).
+   \end{equation}
+ 
+-  \textbf{步骤3：定向探索的误差分析。}基于不确定性引导的定向探索策略将采样密度集中于高不确定性的边界/变化区域。若将该区域的有效维度近似为$d_B$，则可令$d_{\mathrm{eff}}=d_B$并重复上述偏差-方差权衡，得到最优带宽$h \sim n^{-1/(d_B+2)}$，从而
++  对定向探索，样本更多地集中于边界区域，此时估计问题的主导维度下降为$d_B$。令$d_{\mathrm{eff}} = d_B$，同样由式(\ref{Eq:Chap4_bias_variance})可得最优带宽$h \sim n^{-1/(d_B+2)}$，于是
+   \begin{equation}
+-    \text{MSE}_{\text{directed}} = O(n^{-2/(d_B+2)}).
++    \mathrm{MSE}_{\mathrm{directed}} = O\big(n^{-2/(d_B+2)}\big).
+   \end{equation}
+-
+-  \textbf{步骤4：收敛速率比较。}比较两种策略的收敛速率指数：均匀采样为$2/(d+2)$，定向探索为$2/(d_B+2)$。由于$d_B < d$，有$d_B + 2 < d + 2$，从而$2/(d_B+2) > 2/(d+2)$。这意味着定向探索策略的MSE以更快的速率收敛至零。
+-
+-  特别地，当$d_B = d - 1$（边界为超曲面的典型情况）时，上式对应的收敛指数从$2/(d+2)$改善为$2/(d+1)$。
++  由于$d_B < d$，故$2/(d_B+2) > 2/(d+2)$，定向探索的收敛指数严格更大，命题得证。
+ \end{proof}
+ 
+-定理\ref{Thm:Chap4_convergence}的核心洞察是：在高维空间中，均匀采样会在模型已经准确的常数区域内部浪费大量样本，而定向探索将样本集中于模型预测不确定的边界区域，从而更高效地降低整体估计误差。该结果与主动学习中“不确定性采样”策略的理论基础一致\cite{Settles2009Active}，表明基于不确定性引导的样本选择在函数估计任务中具有本质优势。
++该定理的核心含义是：在高维空间中，如果模型误差主要集中在少量“变化区域”，那么继续在大量已被准确建模的区域内均匀采样会浪费在线预算；相反，沿着高不确定性区域定向补样，可以更有效地降低模型误差。这一结论与主动学习中“不确定性采样优于均匀采样”的基本思想一致\cite{Settles2009Active}。
+ 
+-由定理\ref{Thm:Chap4_convergence}可知，定向探索的收敛速率改善幅度取决于边界维度$d_B$与空间维度$d$的差异。当$d$较大而$d_B$相对较小时（如高维空间中的低维边界流形），收敛速率的改善更为显著。这意味着在相同样本数量下，定向探索可实现更低的模型估计误差；或者，达到相同精度所需的样本数量更少。
++需要强调的是，定理\ref{Thm:Chap4_convergence}给出的幂次形式属于理想化假设下的有效维度分析，旨在解释定向探索提升样本效率的机制；对于更一般的转移函数与噪声环境，收敛速率的严格形式与常数项还需依赖更细致的统计学习条件。
+ 
+ \subsection{策略性能的单调改善保证}\label{Sec4.3.2}
+ 
+-本节证明定向探索策略采集高动作价值样本可保证策略性能的单调改善。该证明基于以下关键引理。
++上一小节说明了定向探索为何有助于更快改进模型；本小节进一步说明：如果在线样本确实降低了模型误差，并将策略引向更高奖励区域，那么策略性能的下界会相应改善。这一结论对应于定向探索目标中同时包含$u_{\mathrm{on}}(s,a)$与$Q(s,a)$的设计。
++
++以下引理源自 MOPO~\cite{Yu2020MOPO}，它将真实 MDP 与估计 MDP 下的期望回报差表示为模型偏差的期望。
+ 
+-\begin{lem}[Telescoping引理\cite{Yu2020MOPO}]\label{Lem:Chap4_telescoping}
+-  设$M$和$\hat{M}$为两个具有相同奖励函数$r$但不同动力学$T$和$\hat{T}$的MDP。定义模型偏差函数：
++\begin{lem}[Telescoping 引理~\cite{Yu2020MOPO}]\label{Lem:Chap4_telescoping}
++  设$M$和$\hat{M}$为两个具有相同奖励函数$r$、不同动力学$T$和$\hat{T}$的MDP。定义模型偏差函数
+   \begin{equation}
+-    G^{\pi}_{\hat{M}}(s, a) := \mathbb{E}_{s'\sim\hat{T}(s,a)}[V^{\pi}_M(s')] - \mathbb{E}_{s'\sim T(s,a)}[V^{\pi}_M(s')],
++    G_{\hat{M}}^{\pi}(s,a) := \mathbb{E}_{s'\sim\hat{T}(s,a)}[V_M^{\pi}(s')] - \mathbb{E}_{s'\sim T(s,a)}[V_M^{\pi}(s')],
+   \end{equation}
+-  则策略$\pi$在两个MDP上的期望回报之差为：
++  则策略$\pi$在两个MDP上的期望回报之差为
+   \begin{equation}\label{Eq:Chap4_telescoping}
+-    \eta_{\hat{M}}(\pi) - \eta_M(\pi) = \gamma \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[G^{\pi}_{\hat{M}}(s, a)].
++    \eta_{\hat{M}}(\pi) - \eta_M(\pi) = \gamma \, \mathbb{E}_{(s,a)\sim\rho_{\hat{T}}^{\pi}}\left[G_{\hat{M}}^{\pi}(s,a)\right].
+   \end{equation}
+-  作为直接推论，策略在真实环境$M$中的期望回报有下界：
++  由此可得真实环境中的期望回报下界：
+   \begin{equation}\label{Eq:Chap4_lower_bound}
+-    \eta_M(\pi) \geq \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - \gamma |G^{\pi}_{\hat{M}}(s, a)|].
++    \eta_M(\pi) \ge \mathbb{E}_{(s,a)\sim\rho_{\hat{T}}^{\pi}}\big[r(s,a) - \gamma |G_{\hat{M}}^{\pi}(s,a)|\big].
+   \end{equation}
+ \end{lem}
+ 
+-基于上述引理，可证明以下策略改善定理。
++基于该引理，记离线预训练结束时的策略为$\pi_{\mathrm{off}}$、转移模型为$\hat{T}_{\mathrm{off}}$；在线微调后的策略为$\pi_{\mathrm{on}}$、转移模型为$\hat{T}_{\mathrm{on}}$。设价值函数有界$|V_M^{\pi}(s)| \le V_{\max}$，并定义转移模型在$(s,a)$处的总变差距离为
++\begin{equation}
++  \epsilon_{\hat{T}}(s,a) := \|\hat{T}(\cdot|s,a) - T(\cdot|s,a)\|_{\mathrm{TV}}.
++\end{equation}
+ 
+-\begin{thm}[策略性能的单调改善]\label{Thm:Chap4_policy_improvement}
+-  设$\pi_{off}$、$\hat{T}_{off}$和$\hat{M}_{off}$分别为离线预训练的策略、转移模型和MDP；$\pi_{on}$、$\hat{T}_{on}$和$\hat{M}_{on}$分别为在线微调后的策略、转移模型和MDP。设价值函数有界，即$|V^{\pi}_M(s)| \leq V_{max}$。定义策略的期望回报下界为：
++\begin{thm}[策略性能的单调改善（充分条件）]\label{Thm:Chap4_policy_improvement}
++  构造策略性能下界函数
+   \begin{equation}
+-    \underline{\eta}(\pi, \hat{T}) := \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - 2\gamma V_{max} \cdot \epsilon_{\hat{T}}(s,a)],
++    \underline{\eta}(\pi,\hat{T}) := \mathbb{E}_{(s,a)\sim\rho_{\hat{T}}^{\pi}}\big[r(s,a) - 2\gamma V_{\max} \, \epsilon_{\hat{T}}(s,a)\big].
+   \end{equation}
+-  其中$\epsilon_{\hat{T}}(s,a) = \|\hat{T}(\cdot|s,a) - T(\cdot|s,a)\|_{TV}$为转移模型在$(s,a)$处的总变差误差。若满足以下条件：
++  若以下两个条件同时成立：
+   \begin{enumerate}
+-    \item \textbf{模型误差降低}：对于$\pi_{on}$访问的状态-动作对，在线数据使模型误差降低，即$\mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[\epsilon_{\hat{T}_{on}}(s,a)] \leq \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[\epsilon_{\hat{T}_{off}}(s,a)]$；
+-    \item \textbf{策略访问高奖励区域}：在线策略访问更高奖励区域，即$\mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[r(s,a)] \geq \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[r(s,a)]$，
++    \item \textbf{模型误差降低}：在线策略访问区域上的平均模型误差不高于离线策略，即
++          \[
++            \mathbb{E}_{\rho_{\hat{T}_{\mathrm{on}}}^{\pi_{\mathrm{on}}}}[\epsilon_{\hat{T}_{\mathrm{on}}}]
++            \le
++            \mathbb{E}_{\rho_{\hat{T}_{\mathrm{off}}}^{\pi_{\mathrm{off}}}}[\epsilon_{\hat{T}_{\mathrm{off}}}];
++          \]
++    \item \textbf{访问更高奖励区域}：在线策略访问区域上的平均奖励不低于离线策略，即
++          \[
++            \mathbb{E}_{\rho_{\hat{T}_{\mathrm{on}}}^{\pi_{\mathrm{on}}}}[r(s,a)]
++            \ge
++            \mathbb{E}_{\rho_{\hat{T}_{\mathrm{off}}}^{\pi_{\mathrm{off}}}}[r(s,a)].
++          \]
+   \end{enumerate}
+-  则微调后策略的期望回报下界不低于离线策略，即$\underline{\eta}(\pi_{on}, \hat{T}_{on}) \geq \underline{\eta}(\pi_{off}, \hat{T}_{off})$。结合引理\ref{Lem:Chap4_telescoping}，有$\eta_M(\pi_{on}) \geq \underline{\eta}(\pi_{on}, \hat{T}_{on})$。
++  则有
++  \begin{equation}
++    \underline{\eta}(\pi_{\mathrm{on}},\hat{T}_{\mathrm{on}})
++    \ge
++    \underline{\eta}(\pi_{\mathrm{off}},\hat{T}_{\mathrm{off}}).
++  \end{equation}
++  进一步，由引理\ref{Lem:Chap4_telescoping}可知$\eta_M(\pi_{\mathrm{on}}) \ge \underline{\eta}(\pi_{\mathrm{on}},\hat{T}_{\mathrm{on}})$，即真实回报的下界得到保持或提升。
+ \end{thm}
+ 
+ \begin{proof}
+-  首先建立模型偏差函数$G^{\pi}_{\hat{M}}(s, a)$与转移误差$\epsilon_{\hat{T}}(s,a)$的关系。
+-
+-  \textbf{步骤1：模型偏差的上界。}
+-  由模型偏差函数的定义：
+-  \begin{align}
+-    |G^{\pi}_{\hat{M}}(s, a)| & = |\mathbb{E}_{s'\sim\hat{T}(s,a)}[V^{\pi}_M(s')] - \mathbb{E}_{s'\sim T(s,a)}[V^{\pi}_M(s')]|.
+-  \end{align}
+-  设$V^{\pi}_M$有界，即$|V^{\pi}_M(s)| \leq V_{max}$。由总变差距离的等价定义，对于任意有界函数$f$有$|\mathbb{E}_{P}[f] - \mathbb{E}_{Q}[f]| \leq 2\|f\|_\infty \|P-Q\|_{TV}$，因此：
++  首先建立模型偏差函数与转移误差的关系。由总变差距离的标准上界，对任意有界函数$f$有
++  \begin{equation}
++    |\mathbb{E}_P[f] - \mathbb{E}_Q[f]| \le 2\|f\|_{\infty}\|P-Q\|_{\mathrm{TV}},
++  \end{equation}
++  因此
+   \begin{equation}
+-    |G^{\pi}_{\hat{M}}(s, a)| \leq 2 V_{max} \cdot \|\hat{T}(\cdot|s,a) - T(\cdot|s,a)\|_{TV} = 2 V_{max} \cdot \epsilon_{\hat{T}}(s,a).
++    |G_{\hat{M}}^{\pi}(s,a)| \le 2V_{\max} \, \epsilon_{\hat{T}}(s,a).
+   \end{equation}
+-  由引理\ref{Lem:Chap4_telescoping}的下界公式(\ref{Eq:Chap4_lower_bound})：
++  将其代入式(\ref{Eq:Chap4_lower_bound})，得到
+   \begin{equation}
+-    \eta_M(\pi) \geq \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - \gamma |G^{\pi}_{\hat{M}}(s, a)|] \geq \mathbb{E}_{(s,a)\sim \rho^{\pi}_{\hat{T}}}[r(s,a) - 2\gamma V_{max} \cdot \epsilon_{\hat{T}}(s,a)].
++    \eta_M(\pi)
++    \ge
++    \mathbb{E}_{(s,a)\sim\rho_{\hat{T}}^{\pi}}\big[r(s,a) - 2\gamma V_{\max} \, \epsilon_{\hat{T}}(s,a)\big]
++    = \underline{\eta}(\pi,\hat{T}).
+   \end{equation}
+ 
+-  \textbf{步骤2：应用条件得到结论。}
+-  根据下界定义，有：
+-  \begin{align}
+-    \underline{\eta}(\pi_{on}, \hat{T}_{on}) - \underline{\eta}(\pi_{off}, \hat{T}_{off}) & = \mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[r(s,a) - 2\gamma V_{max} \cdot \epsilon_{\hat{T}_{on}}(s,a)]           \\
+-                                                                                          & \quad - \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[r(s,a) - 2\gamma V_{max} \cdot \epsilon_{\hat{T}_{off}}(s,a)].
+-  \end{align}
+-  将上式分解为奖励项之差与误差项之差：
++  接下来比较在线策略与离线策略的下界差：
+   \begin{align}
+-     & = \left(\mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[r(s,a)] - \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[r(s,a)]\right)                                                                     \\
+-     & \quad - 2\gamma V_{max} \left(\mathbb{E}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}}[\epsilon_{\hat{T}_{on}}(s,a)] - \mathbb{E}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}}[\epsilon_{\hat{T}_{off}}(s,a)]\right).
++    &\underline{\eta}(\pi_{\mathrm{on}},\hat{T}_{\mathrm{on}}) - \underline{\eta}(\pi_{\mathrm{off}},\hat{T}_{\mathrm{off}}) \\
++    ={}& \Big(\mathbb{E}_{\rho_{\hat{T}_{\mathrm{on}}}^{\pi_{\mathrm{on}}}}[r] - \mathbb{E}_{\rho_{\hat{T}_{\mathrm{off}}}^{\pi_{\mathrm{off}}}}[r]\Big) \\
++        &\quad - 2\gamma V_{\max} \Big(\mathbb{E}_{\rho_{\hat{T}_{\mathrm{on}}}^{\pi_{\mathrm{on}}}}[\epsilon_{\hat{T}_{\mathrm{on}}}] - \mathbb{E}_{\rho_{\hat{T}_{\mathrm{off}}}^{\pi_{\mathrm{off}}}}[\epsilon_{\hat{T}_{\mathrm{off}}}]\Big).\nonumber
+   \end{align}
+-  其中常数因子$2\gamma V_{max}$为正，因此不影响符号判断。
+-  由条件2，第一项（奖励项之差）非负；由条件1，括号内第二项非正，故整个第二项非负。因此$\underline{\eta}(\pi_{on}, \hat{T}_{on}) - \underline{\eta}(\pi_{off}, \hat{T}_{off}) \geq 0$，定理得证。
+-\end{proof}
+-定理\ref{Thm:Chap4_policy_improvement}的两个条件对应定向探索策略的两个设计要素：条件1（模型误差降低）由不确定性引导探索保证——探索高不确定性区域可有效补充模型训练数据（定理\ref{Thm:Chap4_convergence}）；条件2（访问高奖励区域）由价值引导探索保证——引入$Q(s,a)$项使策略倾向于访问高动作价值的状态-动作对。两个条件的同时满足解释了为何定向探索目标（公式\ref{Eq:Chap4_exploration_objective}）需要同时考虑不确定性项和价值项。
+-
+-
+-\subsection{理论分析小结}\label{Sec4.3.3}
+-
+-综合定理\ref{Thm:Chap4_convergence}和定理\ref{Thm:Chap4_policy_improvement}，本文提出的定向探索策略同时优化两个目标：通过探索高不确定性区域提升转移模型的收敛速率；通过探索高动作价值区域保证策略性能的单调改善。定理\ref{Thm:Chap4_convergence}表明，定向探索的收敛速率为$O(n^{-2/(d_B+2)})$，优于均匀采样的$O(n^{-2/(d+2)})$，其中$d_B < d$为边界区域的有效维度。定理\ref{Thm:Chap4_policy_improvement}表明，在模型误差降低和策略访问高奖励区域两个条件下，策略性能的下界单调改善。这两个理论结果共同支撑了算法设计中不确定性项$u(s,a)$和价值项$Q(s,a)$的双重引导机制。
+-
+-需要说明的是，定理\ref{Thm:Chap4_convergence}给出的幂次形式属于在理想化假设下的“有效维度”分析，旨在解释定向探索提升样本效率的机制；在更一般的动力学函数族与采样/噪声设定下，收敛率的严格形式与常数项通常需要依赖更细致的统计学习理论条件与引用加以刻画。
+-
+-定理\ref{Thm:Chap4_convergence}基于分段常数函数的假设，而实际环境的转移函数可能更为复杂。分段常数函数可视为对复杂函数的局部近似，该理论结果仍具有指导意义：基于不确定性引导的定向探索在函数变化剧烈（对应高不确定性）的区域采集更多样本，有助于更精确地刻画转移函数的复杂结构。
+-
+-
+-\section{理论分析}\label{Sec4.4}
+-
+-本节旨在证明定向探索机制在离线到在线转换过程中的稳定性与高效性。我们将证明：(1) 定向探索目标函数能够保证在线微调初期的策略单调不减；(2) 相比于随机探索，基于不确定性引导的定向探索具有更紧的样本复杂度上界。
+-
+-\subsection{策略微调的单调提升性质}\label{Sec4.4.1}
+-
+-在从离线切换到在线阶段时，最核心的风险在于分布偏移导致 Q 函数估计崩塌。设 $\pi_{off}$ 为离线阶段最优策略，$\pi_k$ 为在线微调第 $k$ 步的策略。在线阶段的增强目标函数为 $\tilde{J}(\pi) = \mathbb{E}[R(\tau) + \beta_k \cdot U(\tau)]$，其中 $U(\tau)$ 为轨迹的累积不确定性奖赏。
+-
+-\begin{prop}[微调初期的策略稳定性]\label{Prop:4.1_stability}
+-    设离线阶段学习到的保守 $Q$ 函数为 $\hat{Q}_{off}$。若在线微调初期的探索权重 $\beta_k$ 满足 $\beta_k \leq \epsilon / \max U(s,a)$，则在线目标函数 $\tilde{J}(\pi)$ 的最优解 $\pi^*$ 与离线最优策略 $\pi_{off}$ 之间的性能差距被界定在 $\mathcal{O}(\epsilon)$ 内，即定向探索不会导致策略发生剧烈偏离。
+-\end{prop}
+-
+-\begin{proof}
+-    考虑到在线目标函数 $\tilde{J}(\pi) = J(\pi) + \beta_k \mathbb{E}_{\pi}[U]$。
+-    根据策略梯度定理的变体，若 $\beta_k$ 足够小，则定向探索项可视作对原始目标函数的正则化。由于离线阶段已通过累积不确定性惩罚保证了 $\hat{Q}_{off}$ 在数据流形内的准确性，且 $\beta_k$ 随 $k$ 动态调整（由 Sigmoid 函数控制），在切换瞬间 ($k=0$)，权重处于高位但有限，通过约束 $\beta_k$ 的初值，可以证明 $\pi_1$ 仍处于 $\pi_{off}$ 的置信区域（Trust Region）内，从而避免了幼稚在线微调中常见的性能骤降现象。
+-\end{proof}
+-
+-\subsection{定向探索的样本效率优势}\label{Sec4.4.2}
+-
+-本节证明为何“定向”探索优于传统的无向探索。
+-
+-\begin{thm}[探索覆盖速率相变]\label{Thm:4.1_efficiency}
+-    定义 $\mathcal{F}$ 为模型有效覆盖的状态空间集合。设 $S_{exp}$ 为通过探索新增的覆盖范围。相比于均匀随机探索（速率为 $\eta_{rand}$），定向探索在权重 $\beta_k$ 引导下的覆盖扩展速率 $\eta_{direct}$ 满足：
+-    \begin{equation}
+-        \frac{\eta_{direct}}{\eta_{rand}} \propto \exp\left( \frac{\nabla_\pi \mathbb{E}[U(s,a)]}{\sigma_{model}} \right)
+-    \end{equation}
+-    其中 $\sigma_{model}$ 为当前模型的不确定性水平。
+-\end{thm}
+-
+-\begin{proof}
+-    定向探索的梯度更新方向为 $g = \nabla_\theta \log \pi_\theta (s,a) [Q(s,a) + \beta_k u(s,a)]$。
+-    在离线数据边界处，$Q(s,a)$ 的梯度逐渐变平缓，而 $u(s,a)$（集成分歧）的梯度 $\nabla u$ 达到极大值。
+-    随机探索本质上是在状态空间进行各向同性的布朗运动，其到达目标区域的期望时间随距离呈二次方增长；而定向探索通过将不确定性映射为引力场，使梯度更新具有明显的指向性（指向模型认知最薄弱的区域）。
+-    通过计算 Ornstein-Uhlenbeck 过程在有向势场下的首达时间（First Passage Time），可以证明在 $\beta_k > 0$ 时，智能体进入未知高价值区域的概率比纯随机探索高出一个指数级因子。
+-\end{proof}
+-
+-\subsection{权重自适应的对偶解释}\label{Sec4.4.3}
+-
+-第四章采用的递减 Sigmoid 权重 $\beta_k = \frac{\beta_0}{1 + e^{k - K_0}}$ 不仅仅是一个启发式设计，它可以被解释为一种**动态退火的对偶变量**。
+-
+-\begin{prop}[拉格朗日对偶视角]\label{Prop:4.2_duality}
+-    自适应权重 $\beta_k$ 的演化轨迹等价于在在线微调过程中，逐渐放宽对“行为克制（Behavior Constraint）”的拉格朗日乘子约束。随着模型在交互中通过新增样本 $\mathcal{D}_{online}$ 降低了全局认知不确定性，对应约束空间的体积扩大， $\beta_k \to 0$ 保证了算法最终收敛至无偏的在线最优策略。
+-\end{prop}
+-
+-该理论框架说明了本章算法的核心贡献：利用不确定性梯度实现“有目的”的跨步，并利用动态权重保证了从离线保守性到在线最优性的平滑桥接。
+-
+-\section{理论分析}\label{Sec4.3}
+-
+-本节从理论角度分析定向探索策略的优势。首先在理想化的分段常数函数与有效维度假设下，论证基于不确定性引导的定向探索相比均匀采样可实现更优的模型收敛速率；然后基于性能下界分析，证明在模型误差降低且策略访问更高奖励区域的条件下，策略性能的单调改善性质。两段分析分别对应定向探索目标中的不确定性项 \(u_{\mathrm{on}}(s,a)\) 与价值项 \(Q(s,a)\)。
+-
+-\subsection{定向探索的收敛速率分析}\label{Sec4.3.1}
+-
+-为阐明定向探索的样本效率优势，我们在一组理想化假设下进行分析：
+-\begin{enumerate}
+-    \item \textbf{分段常数转移函数}：真实转移函数 \(T\) 在状态-动作空间上为分段常数，即在有限个区域内部取常数值，仅在区域边界发生突变；
+-    \item \textbf{局部常数估计器}：模型估计采用局部常数回归（或具有同等偏差-方差阶的估计器），其收敛速率由边界区域的有效维度决定；
+-    \item \textbf{完美不确定性估计}：不确定性度量 \(u_{\mathrm{on}}(s,a)\) 能精确识别预测不可靠的区域（即函数突变的边界）；
+-    \item \textbf{定向采样集中}：基于不确定性的采样策略能将样本尽可能集中于边界区域。
+-\end{enumerate}
+-这些假设在一般环境中并不严格成立，对应分析旨在揭示定向探索提升样本效率的机制，而非给出严格收敛证明。
+-
+-\begin{defn}[分段常数函数]\label{Def:Chap4_piecewise_constant}
+-设 \(\mathcal{X}\subset\mathbb{R}^d\) 为状态-动作空间的子集。函数 \(T:\mathcal{X}\to\mathbb{R}\) 称为分段常数函数，若存在 \(\mathcal{X}\) 的有限划分 \(\{R_1,\ldots,R_M\}\)，使得 \(T\) 在每个区域 \(R_m\) 内取常数值 \(c_m\)。记 \(\mathrm{PC}(\beta,M)\) 为满足 \(\sum_{m=1}^{M}|\partial R_m|^\beta<\infty\) 的分段常数函数集合，其中 \(|\partial R_m|\) 表示区域边界的测度，\(\beta\) 为边界光滑性参数。
+-\end{defn}
+-
+-\begin{thm}[定向探索的收敛速率优势（理想化分析）]\label{Thm:Chap4_convergence}
+-在上述假设下，设状态-动作空间维度为 \(d\)，边界区域的有效维度为 \(d_B<d\)（典型情形 \(d_B=d-1\)）。设总采样数为 \(n\)。则模型估计的均方误差满足：
+-\begin{enumerate}
+-    \item 均匀采样策略：\(\displaystyle\mathrm{MSE}_{\mathrm{uniform}}=O\big(n^{-2/(d+2)}\big)\)；
+-    \item 基于不确定性引导的定向探索策略：\(\displaystyle\mathrm{MSE}_{\mathrm{directed}}=O\big(n^{-2/(d_B+2)}\big)\)。
+-\end{enumerate}
+-由于 \(d_B<d\)，有 \(2/(d_B+2)>2/(d+2)\)，因此定向探索策略具有更快的收敛速率。
+-\end{thm}
+-
+-\begin{proof}
+-对于分段常数函数，模型误差集中于边界区域。记边界区域的样本数为 \(n_{\mathrm{bdry}}\)。
+-
+-\textbf{均匀采样：} 样本均匀分布于整个空间，边界区域获得的样本数 \(n_{\mathrm{bdry}}\propto n\)，但方差项的有效维度为整个空间维度 \(d\)。采用带宽 \(h\) 的局部常数估计器，其偏差-方差权衡为
+-\begin{equation}\label{Eq:Chap4_bias_variance}
+-\mathrm{MSE}(h)=O(h^2)+O\!\left(\frac{1}{n\,h^{d}}\right).
+-\end{equation}
+-最优带宽 \(h\sim n^{-1/(d+2)}\) 代入得 \(\mathrm{MSE}_{\mathrm{uniform}}=O(n^{-2/(d+2)})\)。
+-
+-\textbf{定向探索：} 将全部 \(n\) 个样本集中于边界区域，此时方差项的有效维度退化为边界维度 \(d_B\)，偏差-方差权衡为
+-\begin{equation}
+-\mathrm{MSE}(h)=O(h^2)+O\!\left(\frac{1}{n\,h^{d_B}}\right).
+-\end{equation}
+-最优带宽 \(h\sim n^{-1/(d_B+2)}\) 代入得 \(\mathrm{MSE}_{\mathrm{directed}}=O(n^{-2/(d_B+2)})\)。
+-
+-\textbf{比较：} 由于维度差为 \(d-d_B\ge1>0\)，定向探索的收敛指数严格更大，速率更快。
+-\end{proof}
+-
+-\textbf{与算法的连接：} 在线阶段的不确定性估计 \(u_{\mathrm{on}}(s,a)\) 综合了模型的预测方差和集成分歧，其数值在数据覆盖稀疏的区域（即上述分析中的边界区域）取高值。因此，用 \(u_{\mathrm{on}}\) 引导采样近似于将样本集中于边界，实现了上述分析中的定向采样策略。
+-
+-需要指出的是，定理~\ref{Thm:Chap4_convergence} 给出的幂次形式属于理想化假设下的有效维度分析，旨在解释定向探索提升样本效率的机制；对于更一般的转移函数与噪声环境，收敛速率的严格形式和常数项需依赖更精细的统计学习条件。
+-
+-\subsection{策略性能的单调改善保证}\label{Sec4.3.2}
+-
+-本节证明当在线采集的样本确实带来模型误差降低且访问更高奖励区域时，策略性能的下界将单调提升。这为定向探索目标中同时包含不确定性项 \(u_{\mathrm{on}}\) 和价值项 \(Q\) 提供了理论依据。
+-
+-以下引理源自 MOPO~\cite{Yu2020MOPO}，它将真实 MDP 与估计 MDP 下的期望回报之差表示为模型偏差的期望。
+-
+-\begin{lem}[Telescoping 引理~\cite{Yu2020MOPO}]\label{Lem:Chap4_telescoping}
+-设 \(M\) 和 \(\hat{M}\) 为两个具有相同奖励函数 \(r\)、不同动力学 \(T\) 和 \(\hat{T}\) 的 MDP。定义模型偏差函数
+-\begin{equation}
+-G^{\pi}_{\hat{M}}(s,a):=\mathbb{E}_{s'\sim\hat{T}(s,a)}[V^{\pi}_M(s')]-\mathbb{E}_{s'\sim T(s,a)}[V^{\pi}_M(s')],
+-\end{equation}
+-则策略 \(\pi\) 在两个 MDP 上的期望回报之差为
+-\begin{equation}\label{Eq:Chap4_telescoping}
+-\eta_{\hat{M}}(\pi)-\eta_M(\pi)=\gamma\,\mathbb{E}_{(s,a)\sim\rho^{\pi}_{\hat{T}}}[G^{\pi}_{\hat{M}}(s,a)].
+-\end{equation}
+-由此可得策略在真实环境 \(M\) 中的期望回报下界：
+-\begin{equation}\label{Eq:Chap4_lower_bound}
+-\eta_M(\pi)\geq\mathbb{E}_{(s,a)\sim\rho^{\pi}_{\hat{T}}}\big[r(s,a)-\gamma|G^{\pi}_{\hat{M}}(s,a)|\big].
+-\end{equation}
+-\end{lem}
+-
+-基于该引理，记离线预训练结束时的策略为 \(\pi_{\mathrm{off}}\)、转移模型为 \(\hat{T}_{\mathrm{off}}\)；在线微调后的策略为 \(\pi_{\mathrm{on}}\)、转移模型为 \(\hat{T}_{\mathrm{on}}\)。设价值函数有界 \(|V^{\pi}_M(s)|\le V_{\max}\)，定义转移模型在 \((s,a)\) 处的总变差距离为 \(\epsilon_{\hat{T}}(s,a)=\|\hat{T}(\cdot|s,a)-T(\cdot|s,a)\|_{\mathrm{TV}}\)。
+-
+-\begin{thm}[策略性能的单调改善（充分条件）]\label{Thm:Chap4_policy_improvement}
+-构造策略性能的下界函数
+-\begin{equation}
+-\underline{\eta}(\pi,\hat{T}):=\mathbb{E}_{(s,a)\sim\rho^{\pi}_{\hat{T}}}\big[r(s,a)-2\gamma V_{\max}\cdot\epsilon_{\hat{T}}(s,a)\big].
+-\end{equation}
+-若以下两个条件同时成立：
+-\begin{enumerate}
+-    \item \textbf{模型误差降低}：在线策略访问区域的平均模型误差不高于离线策略，即
+-    \[
+-    \mathbb{E}_{\rho^{\pi_{\mathrm{on}}}_{\hat{T}_{\mathrm{on}}}}[\epsilon_{\hat{T}_{\mathrm{on}}}]
+-    \leq\mathbb{E}_{\rho^{\pi_{\mathrm{off}}}_{\hat{T}_{\mathrm{off}}}}[\epsilon_{\hat{T}_{\mathrm{off}}}];
+-    \]
+-    \item \textbf{访问更高奖励区域}：在线策略访问区域的平均奖励不低于离线策略，即
+-    \[
+-    \mathbb{E}_{\rho^{\pi_{\mathrm{on}}}_{\hat{T}_{\mathrm{on}}}}[r(s,a)]
+-    \geq\mathbb{E}_{\rho^{\pi_{\mathrm{off}}}_{\hat{T}_{\mathrm{off}}}}[r(s,a)],
+-    \]
+-\end{enumerate}
+-则 \(\underline{\eta}(\pi_{\mathrm{on}},\hat{T}_{\mathrm{on}})\geq\underline{\eta}(\pi_{\mathrm{off}},\hat{T}_{\mathrm{off}})\)，进而由引理~\ref{Lem:Chap4_telescoping} 有 \(\eta_M(\pi_{\mathrm{on}})\geq\underline{\eta}(\pi_{\mathrm{on}},\hat{T}_{\mathrm{on}})\)，即真实期望回报的下界得以保持或提升。
+-\end{thm}
+-
+-\begin{proof}
+-首先建立模型偏差函数与转移误差的关系。由总变差距离的等价定义，对任意有界函数 \(f\) 有 \(|\mathbb{E}_P[f]-\mathbb{E}_Q[f]|\le2\|f\|_\infty\|P-Q\|_{\mathrm{TV}}\)，因此
+-\[
+-|G^{\pi}_{\hat{M}}(s,a)|\le2V_{\max}\cdot\epsilon_{\hat{T}}(s,a).
+-\]
+-代入下界公式 (\ref{Eq:Chap4_lower_bound})，得 \(\eta_M(\pi)\ge\underline{\eta}(\pi,\hat{T})\).
+-
+-比较在线策略与离线策略的下界差：
+-\begin{align}
+-\underline{\eta}(\pi_{\mathrm{on}},\hat{T}_{\mathrm{on}})-\underline{\eta}(\pi_{\mathrm{off}},\hat{T}_{\mathrm{off}})
+-&=\Big(\mathbb{E}_{\rho^{\pi_{\mathrm{on}}}_{\hat{T}_{\mathrm{on}}}}[r]-\mathbb{E}_{\rho^{\pi_{\mathrm{off}}}_{\hat{T}_{\mathrm{off}}}}[r]\Big)\\
+-&\quad-2\gamma V_{\max}\Big(\mathbb{E}_{\rho^{\pi_{\mathrm{on}}}_{\hat{T}_{\mathrm{on}}}}[\epsilon_{\hat{T}_{\mathrm{on}}}]-\mathbb{E}_{\rho^{\pi_{\mathrm{off}}}_{\hat{T}_{\mathrm{off}}}}[\epsilon_{\hat{T}_{\mathrm{off}}}]\Big).\nonumber
+-\end{align}
+-由条件2，第一项非负；由条件1，第二项括号内差值为非正，故减去该项后整体使下界不降低。因此 \(\underline{\eta}(\pi_{\mathrm{on}},\hat{T}_{\mathrm{on}})\ge\underline{\eta}(\pi_{\mathrm{off}},\hat{T}_{\mathrm{off}})\)，再由下界关系即得真实回报下界不低于离线下界。
++  由条件2，第一项非负；由条件1，括号内差值非正，因此减去该项不会使整体变小。于是
++  \begin{equation}
++    \underline{\eta}(\pi_{\mathrm{on}},\hat{T}_{\mathrm{on}})
++    \ge
++    \underline{\eta}(\pi_{\mathrm{off}},\hat{T}_{\mathrm{off}}).
++  \end{equation}
++  再结合前述下界关系即得结论。
+ \end{proof}
+ 
+-定理~\ref{Thm:Chap4_policy_improvement} 给出了策略性能单调改善的\textbf{充分条件}，而非算法必然满足的结论。这两个条件恰好对应定向探索目标中两项的设计意图：不确定性项 \(u_{\mathrm{on}}(s,a)\) 引导采集高信息量样本，试图降低模型误差；价值项 \(Q(s,a)\) 引导向高奖励区域移动，试图提升平均奖励。定理的价值在于说明：“如果”在线阶段通过定向探索达成了这两类改善，则性能下界必然单调提升。这为定向探索目标中将 \(u_{\mathrm{on}}\) 与 \(Q\) 加和的形式提供了理论上的合理性依据，而实际能否兑现两个条件取决于环境、数据质量与超参数。
++定理\ref{Thm:Chap4_policy_improvement}强调的是\textbf{充分条件}而不是算法的必然性质。它的价值在于揭示双重引导目标的逻辑分工：不确定性项$u_{\mathrm{on}}(s,a)$对应“补充模型薄弱区域样本”，价值项$Q(s,a)$对应“将有限在线预算优先投入对任务回报有意义的区域”。若在线阶段确实同时达成这两点，则策略性能下界单调改善。
+ 
+ \subsection{理论分析小结}\label{Sec4.3.3}
+ 
+-综合定理~\ref{Thm:Chap4_convergence} 和定理~\ref{Thm:Chap4_policy_improvement}，本节从模型估计与策略优化两个维度论证了定向探索策略的有效性：
+-\begin{itemize}
+-    \item 在分段常数函数及有效维度的理想化假设下，基于不确定性引导的采样可使模型估计的均方误差以更优的速率收敛，揭示了定向探索提升样本效率的内在机制；
+-    \item 在模型误差降低且策略覆盖更高奖励区域的充分条件下，策略的真实期望回报下界单调不降，为“不确定性+价值”的双重引导目标提供了理论解释。
+-\end{itemize}
+-两部分结论共同支撑了本章将不确定性从惩罚信号转化为探索加分信号的核心思想。
++综合定理\ref{Thm:Chap4_convergence}和定理\ref{Thm:Chap4_policy_improvement}，本节从模型估计与策略优化两个维度解释了定向探索策略的有效性：一方面，在理想化的有效维度分析下，不确定性引导采样能够提高模型学习的样本效率；另一方面，在模型误差降低且策略进入更高奖励区域的条件下，策略性能下界会随在线微调而改善。这两部分结论共同说明，第四章并不是简单地“增加在线样本”，而是通过不确定性项与价值项的协同设计，将有限交互预算优先投入最值得探索的区域。
+ 
+ \section{实验验证}\label{Sec4.4}
+ 
+@@ -586,7 +428,7 @@ G^{\pi}_{\hat{M}}(s,a):=\mathbb{E}_{s'\sim\hat{T}(s,a)}[V^{\pi}_M(s')]-\mathbb{E
+ 
+ 在技术实现层面，本章介绍了双重不确定性估计方法，区分偶然不确定性和认知不确定性在不同阶段的作用：离线阶段使用集成模型的预测方差估计偶然不确定性以实现保守性，在线阶段同时使用预测方差和集成分歧度估计两类不确定性以引导探索。在动态权重方面，本章采用与第三章形式相似但方向相反的Sigmoid函数：第三章的惩罚权重随训练递增以从探索转向保守，本章的探索权重随交互递减以从探索转向利用。这种对称设计体现了两章方法的互补性：第三章在离线阶段建立保守的策略基础，本章在在线阶段突破这一保守边界，两者共同构成从保守到探索的完整学习闭环。
+ 
+-在理论分析层面，本章建立了完整的理论框架支撑定向探索策略的有效性。基于分段常数函数假设，证明了定向探索策略相比均匀采样具有更优的收敛速率（定理\ref{Thm:Chap4_convergence}）：定向探索的误差收敛速率为$O(n^{-2/(d_B+2)})$，优于均匀采样的$O(n^{-2/(d+2)})$，其中$d_B < d$为边界区域的有效维度，该结果为算法的样本效率优势提供了理论支撑。同时，基于Telescoping引理（引理\ref{Lem:Chap4_telescoping}）证明了策略性能的单调改善定理（定理\ref{Thm:Chap4_policy_improvement}）：在模型误差降低和策略访问高奖励区域两个条件下，微调后策略的期望回报下界不低于离线策略。该定理的两个条件恰好对应定向探索目标中的不确定性项和价值项，从理论上解释了双重引导机制的必要性。
++在理论分析层面，本章围绕“为何要定向探索”给出了两类互补说明。其一，在分段常数函数与有效维度的理想化假设下，定理\ref{Thm:Chap4_convergence}表明，将在线样本集中于高不确定性的变化区域，可使模型估计误差以$O(n^{-2/(d_B+2)})$的速率收敛，优于均匀采样的$O(n^{-2/(d+2)})$，从而解释了样本效率优势的来源。其二，基于 Telescoping 引理（引理\ref{Lem:Chap4_telescoping}），定理\ref{Thm:Chap4_policy_improvement}给出了策略性能改善的充分条件：当在线样本同时降低模型误差并引导策略进入更高奖励区域时，微调后策略的真实性能下界不低于离线策略。这两个条件分别对应定向探索目标中的不确定性项和价值项，从而解释了双重引导机制的合理性。
+ 
+ 在实验验证层面，本章在D4RL基准测试集的9个问题设置上进行了系统评估。实验结果表明：（1）本章算法在medium-replay数据集上显著优于所有基线方法，在所有任务上均优于MOPO；（2）通过t-SNE可视化验证了定向探索确实聚焦于高不确定性、高价值区域；（3）消融实验证明了动态权重自适应机制对最终性能的积极贡献。实验同时揭示了算法在高质量数据集上的局限性，为后续改进指明了方向。
+ 
+diff --git a/./CHANGELOG.md b/./CHANGELOG.md
+new file mode 100644
+index 0000000..fc44b7a
+--- /dev/null
++++ b/./CHANGELOG.md
+@@ -0,0 +1,28 @@
++## 理论证明审查记录
++
++### 审查结论
++
++- 第 3 章原稿中混入了多套理论分析版本，既有重复标签，也有“证明显然结论”和“把标准 Sigmoid 性质单独立定理”的问题，容易造成逻辑主线分散。最终将其收敛为一套主线，只保留与方法最直接相关的理论内容。
++- 第 3 章后期版本虽然更贴近方法本身，但其中部分写法对理论条件的承诺偏强，与实现公式的对应关系也不够直接。最终改为显式写出模型误差由不确定性上界的假设，并把理论形式对齐到“即时不确定性 + 下一状态累积不确定性”的惩罚结构。
++- 第 4 章旧稿中包含“微调初期稳定性”“OU 首达时间指数因子”“拉格朗日对偶解释”等支撑不足的命题或证明，假设未写全、与正文方法的对应也偏弱。最终删除这些不够稳妥的部分，只保留更容易自洽且与算法设计直接对应的理论分析。
++- 两章原先的理论写法口径不完全一致：第 3 章偏机制解释，第 4 章部分段落偏强断言。最终统一为“第 3 章解释为何保守，第 4 章解释为何定向探索”，并明确区分机制分析、充分条件与实际算法效果。
++
++### 已定稿
++
++- 第 3 章理论部分整理为两条主线：一是累积不确定性的递推表示与有界性；二是在显式误差上界假设下，奖励重塑对应保守代理目标的解释。
++- 第 3 章不再单独证明显而易见或广泛使用的标准结论，例如 Sigmoid 的一般数学性质、标准压缩映射结论等，而是将它们作为背景结论直接引用或文字说明。
++- 第 4 章理论部分整理为两条主线：一是在理想化有效维度假设下，说明定向探索优于均匀采样的样本效率机制；二是基于 MOPO 的 Telescoping 引理，给出策略性能下界单调改善的充分条件。
++- 第 4 章删除了与正文算法对应关系较弱、证明链条不完整的附加命题，使理论部分与方法设计形成一一对应关系。
++- 第 3 章实验分析和本章小结、第 4 章本章小结的表述已同步更新，避免沿用旧版理论中的“递推下界”“完整理论框架”“必然单调提升”等过强措辞。
++
++### 验证情况
++
++- 已检查 `chapter3.tex` 和 `chapter4.tex` 的章节结构、标签重复和理论段落残留情况，确认最终各自只保留一套理论分析主线。
++- 已使用 IDE 诊断检查两个章节，未发现新的 LaTeX 结构性错误；现有提示主要来自拼写检查，对 `MOPO`、`AWAC`、`halfcheetah` 等术语的识别，不影响论文内容。
++- 已尝试编译主文件 `NJUPT_Professional_Thesis_d1.tex`。编译失败原因是本地 TeX 环境中的 `ctexbook` 字体集配置问题：`CTeX fontset 'mac' is unavailable in current mode`。该问题属于环境问题，不是本次章节修改引入的问题。
++
++### 建议
++
++- 下一步可继续通读第 3、4 章的方法介绍、理论分析、实验分析与本章小结，统一前后过渡句和术语口径，使两章整体文风进一步收敛。
++- 可进一步核对理论分析中涉及的统计学习与强化学习参考文献，尤其是有效维度分析、主动学习、不确定性采样与 MOPO 相关引用，增强论证的出处完整性。
++- 如果后续需要提交给导师或合作者，建议使用 patch 文件而不是 commit，以便对方只聚焦于本次理论部分的整理与润色改动。

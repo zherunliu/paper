@@ -21,3 +21,18 @@ main.tex + mybib.bib
    ↓
 第四轮 LaTeX → 读取 main.tex+main.aux → 填充 cite 编号 + 校准页码 → 最终 PDF
 ```
+
+## Git patch
+
+```bash
+git diff --binary -- \
+./NJUPT_Professional_Thesis_draft/chapters/chapter3.tex \
+./NJUPT_Professional_Thesis_draft/chapters/chapter4.tex \
+> ./theory-proof-review.patch
+
+git diff --binary --no-index -- /dev/null \
+./CHANGELOG.md \
+>> ./theory-proof-review.patch
+
+git apply ./theory-proof-review.patch
+```
