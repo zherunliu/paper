@@ -11,12 +11,12 @@
 
 此外，现有方法中的惩罚强度通常设置为常数或依赖人工调参，缺少随训练阶段自适应调节的机制。随着策略迭代更新，其在模型中访问的状态--动作分布会持续变化：训练早期若惩罚过强，策略更新可能过于保守而难以充分利用模型生成数据；训练后期若惩罚过弱，则更易出现分布外推演导致的性能退化。因此，固定惩罚系数难以兼顾不同阶段的需求。
 
-基于以上分析，本章引入两个核心改进：累积状态不确定性度量和自适应动态权重机制。前者综合考虑从初始状态到当前状态的历史不确定性累积，使智能体更全面地评估决策风险；后者根据策略优化进程动态调节惩罚强度：训练早期适当减弱惩罚，避免过度保守并更充分利用模型生成数据；训练后期逐步增强惩罚，抑制分布外推演风险并提升策略稳健性。两者结合实现对“性能提升—风险约束”权衡的自适应调节。
+基于以上分析，本章首先引入累积状态不确定性度量，通过综合考虑从初始状态到当前状态的历史不确定性累积，使智能体更全面地评估决策风险；基于以上的度量，进一步设计自适应动态权重机制，根据策略优化进程动态调节惩罚强度，在训练早期适当减弱惩罚以充分利用模型生成数据，在后期逐步增强惩罚以抑制分布外推演风险，从而实现对"性能提升—风险约束"权衡的自适应调节。
 
 
 \section{算法框架}\label{Sec3.2}
 
-基于第\ref{Sec3.1}节的分析，本节概述本章方法的整体流程，并说明各模块之间的依赖关系。整体流程包括三步：先在离线数据上学习概率转移模型；再在模型中生成短期虚拟轨迹，同时刻画单步转移不确定性与沿轨迹传播的累积状态不确定性；最后通过随训练进程变化的惩罚权重进行奖励重塑，并在SAC框架下更新策略。算法整体流程如图\ref{Fig:Chap3_framework}所示。
+基于第\ref{Sec3.1}节的分析，本节概述本章方法的整体流程，并说明各模块之间的依赖关系。整体流程包括三步：首先，基于离线数据学习概率转移模型；再基于此模型生成短期虚拟轨迹，同时刻画单步转移不确定性与沿轨迹传播的累积状态不确定性；最后通过随训练进程变化的惩罚权重进行奖励重塑，并在SAC框架下更新策略。算法整体流程如图\ref{Fig:Chap3_framework}所示。
 
 \begin{figure}[htbp]
   \centering
@@ -174,410 +174,129 @@
 
 \section{理论分析}\label{Sec3.3}
 
-本节从理论角度分析累积状态不确定性度量和自适应动态权重机制的合理性与有效性。考虑到方法章节已给出完整实现细节，本节聚焦于与算法稳定性和目标函数解释直接相关的核心结论：累积不确定性的递推性质与有界性，以及自适应权重在惩罚目标中的阶段性作用。
+本节围绕与第三章方法设计直接相关的两个问题展开。首先，说明累积状态不确定性具有清晰的递推表示，并在折扣因子$\omega\in(0,1)$下保持有界，从而为网络$u_\phi(s)$提供稳定且可逼近的学习目标。其后，在“单步模型误差可由不确定性上界”的校准条件下，说明本文采用的“即时不确定性 + 下一状态累积不确定性”奖励重塑可以形成保守代理目标。
 
+\subsection{累积不确定性的递推表示与有界性}\label{Sec3.3.1}
 
-\subsection{累积不确定性的性质}\label{Sec3.3.1}
-
-本节分析累积不确定性度量的基本性质，为算法设计提供理论支撑。
-
-\begin{prop}[累积不确定性的折扣累积形式]\label{Prop:Chap3_monotonicity}
-  设$u(s_t)$为状态$s_t$的累积不确定性，按公式(\ref{Eq:Chap3_uncertainty_update})递推更新。若定义单步不确定性项
-  \begin{equation}
-    \ell_t := \log\left(1 + u_{trans}(s_t, a_t)\right) \geq 0,
-  \end{equation}
-  则对任意$t\geq 1$，有
-  \begin{equation}
-    u(s_t) = \sum_{i=0}^{t-1} \omega^{t-1-i} \ell_i.
-  \end{equation}
-  因而，当前状态的累积不确定性是过去单步不确定性的折扣加和，其中越早的历史项权重越小。
-\end{prop}
-
-\begin{proof}
-  由递推公式$u(s_{t+1}) = \omega u(s_t) + \ell_t$，并结合初始条件$u(s_0)=0$，可直接展开得到
-  \begin{align}
-    u(s_1) & = \ell_0, \\
-    u(s_2) & = \omega \ell_0 + \ell_1, \\
-    u(s_3) & = \omega^2 \ell_0 + \omega \ell_1 + \ell_2,
-  \end{align}
-  归纳可得
-  \begin{equation}
-    u(s_t) = \sum_{i=0}^{t-1} \omega^{t-1-i} \ell_i.
-  \end{equation}
-\end{proof}
-
-该命题的意义不在于证明$u(s_t)$随时间单调变化，而在于明确其本质是一个折扣累积量：早期推演的不确定性仍会保留，但随着时间推移按$\omega$逐步衰减。这正对应本文希望刻画的“历史风险会继续影响当前状态，但影响强度逐步减弱”的机制。
-
-\begin{prop}[累积不确定性的上界]\label{Prop:Chap3_upper_bound}
-  设$u_{max} = \max_{s,a} \log(1 + u_{trans}(s, a))$为单步不确定性的上界。若$\omega < 1$，则经过$t$步后，累积不确定性有上界：
-  \begin{equation}
-    u(s_t) \leq \frac{1 - \omega^t}{1 - \omega} \cdot u_{max}.
-  \end{equation}
-  当$t \to \infty$时，$u(s_t) \leq \frac{u_{max}}{1 - \omega}$。
-\end{prop}
-
-\begin{proof}
-  设$u_0 = u(s_0) = 0$（初始状态无累积不确定性）。由递推公式：
-  \begin{align}
-    u(s_1) & = \omega \cdot 0 + \log(1 + u_{trans}(s_0, a_0)) \leq u_{max},                                \\
-    u(s_2) & = \omega \cdot u(s_1) + \log(1 + u_{trans}(s_1, a_1)) \leq \omega \cdot u_{max} + u_{max},    \\
-           & \vdots \nonumber                                                                              \\
-    u(s_t) & \leq \sum_{i=0}^{t-1} \omega^i \cdot u_{max} = \frac{1 - \omega^t}{1 - \omega} \cdot u_{max}.
-  \end{align}
-  当$t \to \infty$时，$\omega^t \to 0$，因此$u(s_t) \leq \frac{u_{max}}{1 - \omega}$。
-\end{proof}
-
-该命题表明：当$\omega < 1$时，累积不确定性存在有限的上界，不会无限增长。这保证了算法的数值稳定性，使得基于累积不确定性的奖励重塑不会导致数值溢出。
-
-\subsection{自适应权重的探索-保守平衡}\label{Sec3.3.2}
-
-本节分析自适应动态权重机制如何实现探索与保守的平衡。设在训练轮次$k$时，智能体在MDP $M$中的策略为$\pi_k$。为与公式(\ref{Eq:Chap3_reward_shaping})保持一致，定义综合不确定性项
+为与算法描述保持一致，记单步不确定性项为
 \begin{equation}
-  u(s_t, a_t) := \alpha \cdot u_\phi(s_{t+1}) + \log\left(1 + u_{trans}(s_t, a_t)\right),
+  \ell(s,a):=\log\left(1+u_{trans}(s,a)\right)\ge 0.
 \end{equation}
-并据此构造有效MDP $\tilde{M}_k$ 的奖励函数：
-\begin{equation}
-  \tilde{r}_k(s, a) = r(s, a) - \lambda_k \cdot u(s, a),
-\end{equation}
-其中$u(s, a)$表示一步转移对应的综合不确定性度量。
-
-\begin{lem}[惩罚MDP的期望回报分解]\label{Lem:Chap3_decomposition}
-  设$\eta_M(\pi)$为策略$\pi$在原MDP $M$中的期望回报，$\eta_{\tilde{M}_k}(\pi)$为在惩罚MDP $\tilde{M}_k$中的期望回报。则有：
-  \begin{equation}
-    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right].
-  \end{equation}
-\end{lem}
-
-\begin{proof}
-  由期望回报的定义：
-  \begin{align}
-    \eta_{\tilde{M}_k}(\pi) & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \tilde{r}_k(s_t, a_t)\right]                                                                                         \\
-                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \left(r(s_t, a_t) - \lambda_k \cdot u(s_t, a_t)\right)\right]                                                        \\
-                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t)\right] - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right] \\
-                            & = \eta_M(\pi) - \lambda_k \cdot U(\pi),
-  \end{align}
-  其中$U(\pi) = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right]$为策略$\pi$的累积不确定性期望。
-\end{proof}
-
-\begin{thm}[自适应权重的平衡性]\label{Thm:Chap3_balance}
-  在自适应权重机制下，训练轮次$k$时优化的有效目标$\eta_{\tilde{M}_k}(\pi)$可分解为：
-  \begin{equation}
-    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot U(\pi),
-  \end{equation}
-  定义归一化权重$w_k = \lambda_k / \lambda_0 = 1/(1 + e^{K_0 - k})$，则：
-  \begin{enumerate}
-    \item 当$k \ll K_0$时，$w_k \approx 0$，优化目标近似为$\eta_M(\pi)$，策略偏向最大化原始回报（探索主导）；
-    \item 当$k \gg K_0$时，$w_k \approx 1$，惩罚项权重达到$\lambda_0$，策略被强约束以避免高不确定性区域（保守主导）；
-    \item 当$k = K_0$时，$w_k = 0.5$，两种目标权重平衡。
-  \end{enumerate}
-\end{thm}
-
-\begin{proof}
-  由引理\ref{Lem:Chap3_decomposition}，有$\eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot U(\pi)$。
-
-  由$\lambda_k = \lambda_0 / (1 + e^{K_0 - k})$，定义$w_k = \lambda_k / \lambda_0$，则$w_k = 1/(1 + e^{K_0 - k})$为标准Sigmoid函数。
-
-  \textbf{情形1：}当$k \ll K_0$时，$K_0 - k \gg 0$，因此$e^{K_0 - k} \gg 1$，故$w_k = 1/(1 + e^{K_0 - k}) \approx e^{-(K_0-k)} \approx 0$。此时$\lambda_k \approx 0$，优化目标$\eta_{\tilde{M}_k}(\pi) \approx \eta_M(\pi)$，即最大化原始期望回报，策略偏向探索。
-
-  \textbf{情形2：}当$k \gg K_0$时，$K_0 - k \ll 0$，因此$e^{K_0 - k} \approx 0$，故$w_k \approx 1$。此时$\lambda_k \approx \lambda_0$，惩罚项达到最大权重，策略被强约束以避免高不确定性区域，偏向保守。
-
-  \textbf{情形3：}当$k = K_0$时，$e^{K_0 - k} = e^0 = 1$，故$w_k = 1/(1+1) = 0.5$。此时$\lambda_k = \lambda_0/2$，探索与保守的权重平衡。
-
-  Sigmoid函数的单调性（$dw_k/dk > 0$）确保了从探索到保守的平滑过渡。
-\end{proof}
-
-由引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}可知，自适应权重的主要作用是改变训练过程中“回报项”和“不确定性代价项”的相对权重：早期更强调回报提升，后期更强调风险约束。与固定权重相比，该机制提供了更灵活的阶段性调节能力；其实际收益增益由任务数据分布与优化过程共同决定，并在实验部分进一步验证。
-
-
-\subsection{理论分析小结}\label{Sec3.3.3}
-
-综合命题\ref{Prop:Chap3_monotonicity}、命题\ref{Prop:Chap3_upper_bound}、引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}，本文建立了与方法设计直接对应的理论支撑。命题\ref{Prop:Chap3_monotonicity}和命题\ref{Prop:Chap3_upper_bound}分别说明累积不确定性是历史单步不确定性的折扣累积量，且其数值被有限上界控制，从而能够在保留历史风险信息的同时保持数值稳定。引理\ref{Lem:Chap3_decomposition}将惩罚MDP的目标写成“原始回报减不确定性代价”的形式，定理\ref{Thm:Chap3_balance}进一步说明Sigmoid权重可在训练过程中平滑调节两项的相对作用，从而为自适应机制提供理论解释。
-
-\subsection{自适应权重的探索-保守平衡}\label{Sec3.3.2}
-
-本节分析自适应动态权重机制如何实现探索与保守的平衡。设在训练轮次$k$时，智能体在MDP $M$中的策略为$\pi_k$。为与公式(\ref{Eq:Chap3_reward_shaping})保持一致，定义综合不确定性项
-\begin{equation}
-  u(s_t, a_t) := \alpha \cdot u_\phi(s_{t+1}) + \log\left(1 + u_{trans}(s_t, a_t)\right),
-\end{equation}
-并据此构造有效MDP $\tilde{M}_k$ 的奖励函数：
-\begin{equation}
-  \tilde{r}_k(s, a) = r(s, a) - \lambda_k \cdot u(s, a),
-\end{equation}
-其中$u(s, a)$表示一步转移对应的综合不确定性度量。
-
-\begin{lem}[惩罚MDP的期望回报分解]\label{Lem:Chap3_decomposition}
-  设$\eta_M(\pi)$为策略$\pi$在原MDP $M$中的期望回报，$\eta_{\tilde{M}_k}(\pi)$为在惩罚MDP $\tilde{M}_k$中的期望回报。则有：
-  \begin{equation}
-    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right].
-  \end{equation}
-\end{lem}
-
-\begin{proof}
-  由期望回报的定义：
-  \begin{align}
-    \eta_{\tilde{M}_k}(\pi) & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \tilde{r}_k(s_t, a_t)\right]                                                                                         \\
-                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \left(r(s_t, a_t) - \lambda_k \cdot u(s_t, a_t)\right)\right]                                                        \\
-                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t)\right] - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right] \\
-                            & = \eta_M(\pi) - \lambda_k \cdot U(\pi),
-  \end{align}
-  其中$U(\pi) = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right]$为策略$\pi$的累积不确定性期望。
-\end{proof}
-
-\begin{thm}[自适应权重的平衡性]\label{Thm:Chap3_balance}
-  在自适应权重机制下，训练轮次$k$时优化的有效目标$\eta_{\tilde{M}_k}(\pi)$可分解为：
-  \begin{equation}
-    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot U(\pi),
-  \end{equation}
-  定义归一化权重$w_k = \lambda_k / \lambda_0 = 1/(1 + e^{K_0 - k})$，则：
-  \begin{enumerate}
-    \item 当$k \ll K_0$时，$w_k \approx 0$，优化目标近似为$\eta_M(\pi)$，策略偏向最大化原始回报（探索主导）；
-    \item 当$k \gg K_0$时，$w_k \approx 1$，惩罚项权重达到$\lambda_0$，策略被强约束以避免高不确定性区域（保守主导）；
-    \item 当$k = K_0$时，$w_k = 0.5$，两种目标权重平衡。
-  \end{enumerate}
-\end{thm}
-
-\begin{proof}
-  由引理\ref{Lem:Chap3_decomposition}，有$\eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot U(\pi)$。
-
-  由$\lambda_k = \lambda_0 / (1 + e^{K_0 - k})$，定义$w_k = \lambda_k / \lambda_0$，则$w_k = 1/(1 + e^{K_0 - k})$为标准Sigmoid函数。
-
-  \textbf{情形1：}当$k \ll K_0$时，$K_0 - k \gg 0$，因此$e^{K_0 - k} \gg 1$，故$w_k = 1/(1 + e^{K_0 - k}) \approx e^{-(K_0-k)} \approx 0$。此时$\lambda_k \approx 0$，优化目标$\eta_{\tilde{M}_k}(\pi) \approx \eta_M(\pi)$，即最大化原始期望回报，策略偏向探索。
-
-  \textbf{情形2：}当$k \gg K_0$时，$K_0 - k \ll 0$，因此$e^{K_0 - k} \approx 0$，故$w_k \approx 1$。此时$\lambda_k \approx \lambda_0$，惩罚项达到最大权重，策略被强约束以避免高不确定性区域，偏向保守。
-
-  \textbf{情形3：}当$k = K_0$时，$e^{K_0 - k} = e^0 = 1$，故$w_k = 1/(1+1) = 0.5$。此时$\lambda_k = \lambda_0/2$，探索与保守的权重平衡。
-
-  Sigmoid函数的单调性（$dw_k/dk > 0$）确保了从探索到保守的平滑过渡。
-\end{proof}
-
-由引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}可知，自适应权重的主要作用是改变训练过程中“回报项”和“不确定性代价项”的相对权重：早期更强调回报提升，后期更强调风险约束。与固定权重相比，该机制提供了更灵活的阶段性调节能力；其实际收益增益由任务数据分布与优化过程共同决定，并在实验部分进一步验证。
-
-
-\subsection{理论分析小结}\label{Sec3.3.3}
-
-综合命题\ref{Prop:Chap3_monotonicity}、命题\ref{Prop:Chap3_upper_bound}、引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}，本文建立了与方法设计直接对应的理论支撑。命题\ref{Prop:Chap3_monotonicity}和命题\ref{Prop:Chap3_upper_bound}分别说明累积不确定性是历史单步不确定性的折扣累积量，且其数值被有限上界控制，从而能够在保留历史风险信息的同时保持数值稳定。引理\ref{Lem:Chap3_decomposition}将惩罚MDP的目标写成“原始回报减不确定性代价”的形式，定理\ref{Thm:Chap3_balance}进一步说明Sigmoid权重可在训练过程中平滑调节两项的相对作用，从而为自适应机制提供理论解释。
-
-
-\section{理论分析}\label{Sec3.3}
-
-本节从理论角度分析累积状态不确定性度量和自适应动态权重机制的合理性与有效性。考虑到方法章节已给出完整实现细节，本节聚焦于与算法稳定性和目标函数解释直接相关的核心结论：累积不确定性的有界性与收敛性，以及自适应权重在策略优化轨迹中引发的相变（Phase Transition）性质。
-
-\subsection{累积不确定性的性质}\label{Sec3.3.1}
-
-在序列决策中，不确定性沿轨迹传播。根据公式(\ref{Eq:Chap3_uncertainty_update})的递推定义，展开当前状态的累积不确定性，本质上是过去所有单步不确定性 $\ell_t := \log(1 + u_{trans}(s_t, a_t))$ 的折扣加和，即 $u(s_t) = \sum_{i=0}^{t-1} \omega^{t-1-i} \ell_i$。这一形式直观地反映了历史风险的衰减累积机制，但在将该度量引入奖励函数时，必须保证其在无限步推演下的有界性，以防止优化目标发散或发生数值溢出。
-
-\begin{prop}[累积不确定性的严格有界性]\label{Prop:Chap3_upper_bound}
-  设状态转移不确定性存在有限上界，即存在常数 $u_{max} > 0$ 使得对任意 $(s,a)$ 满足 $\log(1 + u_{trans}(s, a)) \leq u_{max}$。若折扣因子 $\omega \in (0, 1)$，则对任意推演步数 $t \geq 1$，累积不确定性 $u(s_t)$ 被严格界定在有限区间内：
-  \begin{equation}
-    u(s_t) \leq \frac{1 - \omega^t}{1 - \omega} \cdot u_{max},
-  \end{equation}
-  且当 $t \to \infty$ 时，存在渐近上界 $\lim_{t \to \infty} u(s_t) \leq \frac{u_{max}}{1 - \omega}$。
-\end{prop}
-
-\begin{proof}
-  定义单步不确定性项 $\ell_i = \log(1 + u_{trans}(s_i, a_i))$。由于初始状态无历史累积不确定性（$u(s_0) = 0$），根据递推公式经过 $t$ 次迭代可得：
-  \begin{equation}
-    u(s_t) = \sum_{i=0}^{t-1} \omega^{t-1-i} \ell_i.
-  \end{equation}
-  由于对任意 $i$ 均有 $\ell_i \leq u_{max}$，利用放缩法和等比数列求和公式，有：
-  \begin{equation}
-    u(s_t) \leq \sum_{i=0}^{t-1} \omega^i \cdot u_{max} = \frac{1 - \omega^t}{1 - \omega} \cdot u_{max}.
-  \end{equation}
-  由于 $\omega \in (0, 1)$，当 $t \to \infty$ 时，$\omega^t \to 0$。因此累积不确定性的极限存在，且被界定在 $\frac{u_{max}}{1 - \omega}$ 之内。命题得证。
-\end{proof}
-
-该命题从理论上保证了算法的数值稳定性：只要对单步转移方差进行合理的约束（在实际神经网络中由输出层的有界处理保证），引入时间折扣 $\omega < 1$ 就能确保累积风险度量不会随推演深度发散，从而为后续的奖励重塑提供良构的（Well-posed）基础。
-
-\subsection{自适应权重的优化轨迹相变}\label{Sec3.3.2}
-
-本节分析自适应动态权重机制如何从数学上控制探索与保守的平衡。设在训练轮次 $k$ 时，智能体在原始 MDP $M$ 中的策略为 $\pi$。定义一步转移对应的综合不确定性度量为 $u(s_t, a_t) := \alpha \cdot u_\phi(s_{t+1}) + \log\left(1 + u_{trans}(s_t, a_t)\right)$，构造带有自适应权重的有效惩罚 MDP $\tilde{M}_k$，其奖励函数为 $\tilde{r}_k(s, a) = r(s, a) - \lambda_k \cdot u(s, a)$。
-
-\begin{lem}[带惩罚 MDP 的期望回报解耦]\label{Lem:Chap3_decomposition}
-  设 $\eta_M(\pi)$ 为策略 $\pi$ 在原 MDP $M$ 中的期望回报，$\eta_{\tilde{M}_k}(\pi)$ 为在有效惩罚 MDP $\tilde{M}_k$ 中的期望回报。则有效优化目标可线性解耦为：
-  \begin{equation}
-    \eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right].
-  \end{equation}
-\end{lem}
-
-\begin{proof}
-  由期望回报的定义以及期望算子的线性性质可直接展开：
-  \begin{align}
-    \eta_{\tilde{M}_k}(\pi) & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t \left(r(s_t, a_t) - \lambda_k \cdot u(s_t, a_t)\right)\right] \nonumber \\
-                            & = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t r(s_t, a_t)\right] - \lambda_k \cdot \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right] \nonumber \\
-                            & = \eta_M(\pi) - \lambda_k \cdot U(\pi),
-  \end{align}
-  其中 $U(\pi) = \mathbb{E}_{\tau \sim \pi}\left[\sum_{t=0}^{\infty} \gamma^t u(s_t, a_t)\right]$ 定义为策略 $\pi$ 的期望轨迹不确定性代价。
-\end{proof}
-
-基于上述解耦形式，下面证明动态权重机制在优化轨迹上引发的相变性质。
-
-\begin{thm}[自适应目标的演化与相变]\label{Thm:Chap3_balance}
-  在动态权重 $\lambda_k = \frac{\lambda_0}{1 + e^{K_0 - k}}$ 下，随训练轮次 $k$ 的增加，有效优化目标 $\eta_{\tilde{M}_k}(\pi)$ 展现出如下渐近演化与相变性质：
-  \begin{enumerate}
-    \item \textbf{渐近无偏性（探索主导）}：当 $k \to 0$ 且 $K_0 \gg 0$ 时，$\eta_{\tilde{M}_k}(\pi) \to \eta_M(\pi)$，策略优化退化为最大化原始期望回报。
-    \item \textbf{绝对保守性（惩罚主导）}：当 $k \to \infty$ 时，$\eta_{\tilde{M}_k}(\pi) \to \eta_M(\pi) - \lambda_0 U(\pi)$，策略被强约束于可靠数据流形。
-    \item \textbf{相变拐点}：$k = K_0$ 是优化轨迹的相变点，此时惩罚项的引入速率达到全局绝对最大值。
-  \end{enumerate}
-\end{thm}
-
-\begin{proof}
-  由引理 \ref{Lem:Chap3_decomposition}，$\eta_{\tilde{M}_k}(\pi) = \eta_M(\pi) - \lambda_k U(\pi)$。
-
-  （1）渐近无偏性：当 $k \to 0$ 时，若超参数 $K_0$ 足够大，则 $e^{K_0 - k} \to e^{K_0} \gg 1$。此时 $\lambda_k \approx 0$，惩罚项消失，目标函数还原为 $\eta_M(\pi)$。
-
-  （2）绝对保守性：当 $k \to \infty$ 时，$K_0 - k \to -\infty$，因此 $e^{K_0 - k} \to 0$。此时 $\lambda_k \to \lambda_0$，算法收敛于以 $\lambda_0$ 为固定常数的最悲观保守目标。
-
-  （3）相变拐点：考察有效优化目标随训练轮次 $k$ 的演化速率（将 $k$ 视作连续变量）：
-  \begin{equation}
-    \frac{\partial \eta_{\tilde{M}_k}(\pi)}{\partial k} = - \frac{\partial \lambda_k}{\partial k} U(\pi).
-  \end{equation}
-  对 Sigmoid 权重求导可得：
-  \begin{equation}
-    \frac{\partial \lambda_k}{\partial k} = \lambda_0 \cdot \frac{e^{K_0 - k}}{(1 + e^{K_0 - k})^2}.
-  \end{equation}
-  为求该变化率的极值，计算二阶导数：
-  \begin{equation}
-    \frac{\partial^2 \lambda_k}{\partial k^2} = \lambda_0 \cdot \frac{e^{K_0 - k}(e^{K_0 - k} - 1)}{(1 + e^{K_0 - k})^3}.
-  \end{equation}
-  令二阶导数为 0，解得唯一驻点 $e^{K_0 - k} = 1$，即 $k = K_0$。此时一阶导数取得绝对极大值 $\frac{\lambda_0}{4}$。
-  这在数学上证明了 $k=K_0$ 为惩罚机制引入的拐点。在 $k < K_0$ 时，保守性加速增加；在 $k > K_0$ 后，保守性减速向 $\lambda_0$ 饱和，实现了“探索-保守”目标的平滑且确定的相变。
-\end{proof}
-
-由引理 \ref{Lem:Chap3_decomposition} 和定理 \ref{Thm:Chap3_balance} 可知，自适应权重本质上刻画了一条目标函数从“无偏探索”向“保守利用”平滑过渡的非线性流形。利用 Sigmoid 导数的单峰特性，算法不仅保证了两端行为的正确性，还确保了过渡阶段不会产生震荡，这为实验中算法能兼顾数据利用效率与稳健性提供了理论依据。
-
-\section{理论分析}\label{Sec3.3}
-
-本章方法的核心设计是引入累积状态不确定性并以其构成奖励惩罚项，同时用自适应权重调节惩罚强度。本节从两个角度为其提供理论支撑：第一，阐明累积不确定性满足一个类似值函数的贝尔曼方程，从而保证其可通过监督学习或时序差分方法逼近；第二，在模型误差被不确定性上界控制的假设下，证明基于累积不确定性的惩罚项能给出真实回报的一个下界，并且该下界比仅惩罚单步不确定性的下界更不保守，从而解释了为什么本章方法能在保持安全性的同时获得更好的策略性能。
-
-\subsection{累积不确定性的贝尔曼方程与可学习性}\label{Sec3.3.1}
-
-考虑转移模型 \(\hat{T}_\theta\) 和当前策略 \(\pi_\varphi\) 诱导的轨迹分布。对于单步不确定性度量 \(u_{\rm trans}(s,a)=\|\Sigma_\theta(s,a)\|_F\)，定义平滑后的单步不确定性
-\[
-\ell(s,a)=\log\!\big(1+u_{\rm trans}(s,a)\big).
-\]
-给定折扣因子 \(\omega\in(0,1)\)，状态 \(s\) 的累积不确定性定义为在模型与策略下沿轨迹的期望折扣和
+给定策略$\pi$与学习到的转移模型$\hat{T}_\theta$，定义状态$s$的期望累积不确定性
 \begin{equation}\label{Eq:Chap3_Udef}
-U^{\pi}(s)=\mathbb{E}_{\substack{a_t\sim\pi(\cdot|s_t)\\ s_{t+1}\sim\hat{T}_\theta(\cdot|s_t,a_t)}}\!\left[\sum_{t=0}^{\infty}\omega^t\,\ell(s_t,a_t)\;\Big|\;s_0=s\right].
+  U^{\pi}(s)=\mathbb{E}_{\substack{a_t\sim\pi(\cdot|s_t)\\s_{t+1}\sim\hat{T}_\theta(\cdot|s_t,a_t)}}\left[\sum_{t=0}^{\infty}\omega^t\ell(s_t,a_t)\middle|s_0=s\right].
 \end{equation}
-该定义与算法中的递推公式(\ref{Eq:Chap3_uncertainty_update})在期望意义上一致，但将其显式表达为状态函数 \(U^{\pi}(s)\)。注意，这正是算法中希望用神经网络 \(u_\phi(s)\) 逼近的量。
+式(\ref{Eq:Chap3_Udef})与公式(\ref{Eq:Chap3_uncertainty_update})中的递推量在期望意义上一致，也是实现中用$u_\phi(s)$逼近的对象。
 
-\begin{prop}[累积不确定性的贝尔曼方程]\label{Prop:Chap3_Bellman}
-给定策略 \(\pi\)，式(\ref{Eq:Chap3_Udef})定义的 \(U^{\pi}\) 是下述贝尔曼方程的唯一解：
-\begin{equation}\label{Eq:Chap3_BellmanEq}
-U(s)=\mathbb{E}_{a\sim\pi(\cdot|s)}\Big[\ell(s,a)+\omega\,\mathbb{E}_{s'\sim\hat{T}_\theta(\cdot|s,a)}[U(s')]\Big].
-\end{equation}
-且相应的贝尔曼算子 \(\mathcal{T}^{\pi}\) 满足 \(\|\mathcal{T}^{\pi}U_1-\mathcal{T}^{\pi}U_2\|_\infty\le\omega\|U_1-U_2\|_\infty\)，即为 \(\omega\)-压缩映射。
+\begin{prop}[累积不确定性的递推表示]\label{Prop:Chap3_monotonicity}
+  对任意策略$\pi$，式(\ref{Eq:Chap3_Udef})定义的$U^{\pi}(s)$满足
+  \begin{equation}\label{Eq:Chap3_BellmanEq}
+    U^{\pi}(s)=\mathbb{E}_{\substack{a\sim\pi(\cdot|s)\\s'\sim\hat{T}_\theta(\cdot|s,a)}}\left[\ell(s,a)+\omega U^{\pi}(s')\right].
+  \end{equation}
+  因而，对具体模型推演轨迹，递推量$u_t$可写为
+  \begin{equation}
+    u_t=\sum_{i=0}^{t-1}\omega^{t-1-i}\ell(s_i,a_i).
+  \end{equation}
 \end{prop}
 
 \begin{proof}
-由定义直接展开即可验证贝尔曼方程成立。压缩性来源于：
-\[
-|\mathcal{T}^{\pi}U_1(s)-\mathcal{T}^{\pi}U_2(s)|
-\le\omega\,\mathbb{E}_{a,s'}\big[|U_1(s')-U_2(s')|\big]
-\le\omega\|U_1-U_2\|_\infty,
-\]
-其中不等号用到了期望的凸性与一致范数。
+  由$U^{\pi}$定义将无穷和的首项与余项分离，并对后续项应用塔式法则，即得式(\ref{Eq:Chap3_BellmanEq})；对轨迹递推式$u_{t+1}=\omega u_t+\ell(s_t,a_t)$反复展开即可得到有限步表达。
 \end{proof}
 
-命题~\ref{Prop:Chap3_Bellman} 将累积不确定性的估计归结为一个标准的策略评估问题：\(U^{\pi}\) 可看作以 \(\ell(s,a)\) 为“奖励”的 MDP 中的状态价值函数。因此，任何用于值函数逼近的方法均可用于学习 \(U^{\pi}\)。特别地，算法中通过递推公式产生监督信号再最小化均方误差（公式~\ref{Eq:Chap3_uncertainty_loss}）的做法，等价于在模型生成的轨迹上执行贝尔曼残差最小化，其收敛性在表格型或线性函数逼近设定下已有成熟保证，在神经网络逼近下也是当前深度强化学习中的标准实践。这为使用独立的 \(u_\phi(s)\) 网络在线估计累积不确定性提供了坚实的理论依据。
+命题\ref{Prop:Chap3_monotonicity}表明，累积不确定性并非单步方差的瞬时读数，而是历史风险的折扣汇总；这一性质与第三章奖励重塑中同时保留即时不确定性项和下一状态不确定性项的设计相一致。
 
-\subsection{基于累积不确定性的性能下界}\label{Sec3.3.2}
+\begin{prop}[累积不确定性的有界性]\label{Prop:Chap3_upper_bound}
+  若存在常数$u_{\max}>0$使得对任意$(s,a)$均有$\ell(s,a)\le u_{\max}$，且$\omega\in(0,1)$，则对任意状态$s$和任意策略$\pi$，有
+  \begin{equation}
+    0\le U^{\pi}(s)\le\frac{u_{\max}}{1-\omega}.
+  \end{equation}
+  此外，对长度为$t$的有限推演轨迹，有
+  \begin{equation}
+    u_t\le\frac{1-\omega^t}{1-\omega}u_{\max}.
+  \end{equation}
+\end{prop}
 
-接下来分析将累积不确定性作为惩罚项的优势。我们沿用 MOPO~\cite{Yu2020MOPO} 的分析框架，将单步模型误差与不确定性绑定，并比较单步惩罚与累积惩罚所导出的性能下界。
+\begin{proof}
+  由$\ell(s,a)\ge0$可得$U^{\pi}(s)\ge0$。同时$\ell(s,a)\le u_{\max}$，故
+  \begin{equation}
+    U^{\pi}(s)\le\sum_{t=0}^{\infty}\omega^tu_{\max}=\frac{u_{\max}}{1-\omega}.
+  \end{equation}
+  对有限步递推量同理可得$u_t\le\sum_{i=0}^{t-1}\omega^iu_{\max}$，命题得证。
+\end{proof}
 
-设真实 MDP 为 \(M\)，其转移函数为 \(T\)，奖励函数为 \(r(s,a)\)；估计模型构成 MDP \(\hat{M}\)，转移函数为 \(\hat{T}\)。假设价值函数有界 \(|V^{\pi}_M(s)|\le V_{\max}\)。
+该有界性结论说明，在单步不确定性经过适当尺度控制后，累积状态不确定性不会随推演深度无界增长，因此可以作为稳定的风险信号参与奖励重塑与策略更新。
 
-下列引理源自 MOPO，它将两个 MDP 间期望回报之差表示为模型偏差的期望。
+\subsection{基于累积不确定性的保守代理目标}\label{Sec3.3.2}
 
-\begin{lem}[Telescoping 引理~\cite{Yu2020MOPO}]\label{Lem:Chap3_telescoping}
-对任意策略 \(\pi\)，定义单步模型偏差
-\[
-G^{\pi}_{\hat{M}}(s,a)=\mathbb{E}_{s'\sim\hat{T}(s,a)}[V^{\pi}_M(s')]-\mathbb{E}_{s'\sim T(s,a)}[V^{\pi}_M(s')],
-\]
-则有
-\begin{equation}
-\eta_{\hat{M}}(\pi)-\eta_M(\pi)=\gamma\,\mathbb{E}_{(s,a)\sim\rho^{\pi}_{\hat{T}}}\big[G^{\pi}_{\hat{M}}(s,a)\big].
+为支撑奖励重塑的合理性，本节沿用 MOPO~\cite{Yu2020MOPO} 的性能下界分析框架与累积不确定性表示进行对接。为便于后续推导，首先定义误差—不确定性校准条件：
+\begin{equation}\tag{A1}\label{Eq:Chap3_error_bound_text}
+  \|\hat{T}(\cdot|s,a)-T(\cdot|s,a)\|_{\mathrm{TV}}\le\beta\,\ell(s,a).
 \end{equation}
+式(A1)表明，模型不确定性越高的位置，其转移误差上界越大。
+
+在理论分析中，考虑理想化形式$\alpha=\omega$，并用真实的$U^{\pi}(s')$替代实现中的近似器$u_\phi(s')$。定义一步惩罚项
+\begin{equation}
+  \bar{u}^{\pi}(s,a,s'):=\ell(s,a)+\omega U^{\pi}(s'),
+\end{equation}
+对应惩罚奖励
+\begin{equation}
+  \tilde{r}_{\lambda}(s,a,s')=r(s,a)-\lambda\,\bar{u}^{\pi}(s,a,s').
+\end{equation}
+这与公式(\ref{Eq:Chap3_reward_shaping})保持同构：实现上以$u_\phi(s')$近似$U^{\pi}(s')$，并将$\alpha$作为可调系数兼顾理论结构与经验效果。
+
+\begin{lem}[惩罚目标的期望回报分解]\label{Lem:Chap3_decomposition}
+  记$\eta_{\hat{M}}(\pi)$为策略$\pi$在估计MDP $\hat{M}$中的期望回报，$\eta_{\hat{M},\tilde{r}_{\lambda}}(\pi)$为在惩罚奖励$\tilde{r}_{\lambda}$下的期望回报，则
+  \begin{equation}
+    \eta_{\hat{M},\tilde{r}_{\lambda}}(\pi)
+    =\eta_{\hat{M}}(\pi)-\lambda\,\mathbb{E}_{\tau\sim(\hat{T},\pi)}\left[\sum_{t=0}^{\infty}\gamma^t\bar{u}^{\pi}(s_t,a_t,s_{t+1})\right].
+  \end{equation}
 \end{lem}
 
-本节的第一个关键假设与 MOPO 类似：不确定性可以上界模型转移的总变差误差。
+该引理由回报定义与期望线性性直接得到，因此不再另行展开。
 
-\begin{assumption}\label{Ass:Chap3_error_bound}
-存在常数 \(\beta>0\)，使得对任意 \((s,a)\)，有
-\[
-D_{\rm TV}\big(T(\cdot|s,a)\,\|\,\hat{T}(\cdot|s,a)\big)\le\beta\,\ell(s,a).
-\]
-\end{assumption}
-
-假设~\ref{Ass:Chap3_error_bound} 要求模型在数据覆盖不足的区域给出较大的 \(\ell(s,a)\)，这通过优化高斯负对数似然损失在期望意义上成立。接下来，我们将累积不确定性 \(U^{\pi}\) 定义为使用与 MDP 相同的折扣因子 \(\gamma\)（取 \(\omega=\gamma\)）的期望折扣和。这个一致性保证了累积不确定性的折扣结构与回报的折扣结构完全对齐。
-
-\begin{thm}[累积不确定性惩罚的性能下界]\label{Thm:Chap3_performance_bound}
-设累积不确定性 \(U^{\pi}(s)\) 以折扣因子 \(\gamma\) 定义，且假设~\ref{Ass:Chap3_error_bound} 成立。则对任意策略 \(\pi\)，其在真实环境中的期望回报满足
-\begin{equation}\label{Eq:Chap3_lowerbound}
-\eta_M(\pi)\ge
-\mathbb{E}_{s_0\sim\rho_0}\!\Big[\mathbb{E}_{\tau\sim\hat{T},\pi}\big[\sum_{t=0}^{\infty}\gamma^t \big(r(s_t,a_t)-2\gamma V_{\max}\beta\,U^{\pi}(s_t)\big)\big]\Big].
-\end{equation}
-进一步，若在模型 \(\hat{M}\) 中使用惩罚奖励 \(\tilde{r}_t=r_t-\lambda U^{\pi}(s_t)\) 并选择 \(\lambda\ge2\gamma V_{\max}\beta\)，则惩罚后的模型期望回报是真实回报的下界：
-\begin{equation}
-\eta_{\hat{M},\tilde{r}}(\pi)\le\eta_M(\pi).
-\end{equation}
+\begin{thm}[累积不确定性惩罚的保守性]\label{Thm:Chap3_balance}
+  设真实环境$M$与估计环境$\hat{M}$具有相同奖励函数，且价值函数有界$|V_M^{\pi}(s)|\le V_{\max}$。若条件(A1)成立，且
+  \begin{equation}
+    \lambda\ge2\gamma V_{\max}\beta,
+  \end{equation}
+  则对任意策略$\pi$有
+  \begin{equation}
+    \eta_{\hat{M},\tilde{r}_{\lambda}}(\pi)\le\eta_M(\pi).
+  \end{equation}
 \end{thm}
 
 \begin{proof}
-由总变差距离的性质，
-\[
-|G^{\pi}_{\hat{M}}(s,a)|\le2V_{\max}D_{\rm TV}\big(T(\cdot|s,a),\hat{T}(\cdot|s,a)\big)\le2V_{\max}\beta\,\ell(s,a).
-\]
-代入 Lemma~\ref{Lem:Chap3_telescoping} 可得
-\[
-\eta_{\hat{M}}(\pi)-\eta_M(\pi)\le2\gamma V_{\max}\beta\,
-\mathbb{E}_{\tau\sim\hat{T},\pi}\!\left[\sum_{t=0}^{\infty}\gamma^t\ell(s_t,a_t)\right].
-\]
-根据 \(U^{\pi}(s)\) 的定义，有
-\[
-\mathbb{E}_{\tau\sim\hat{T},\pi}\!\left[\sum_{t=0}^{\infty}\gamma^t\ell(s_t,a_t)\right]
-=\mathbb{E}_{s_0}\big[U^{\pi}(s_0)\big]
-=\mathbb{E}_{\tau\sim\hat{T},\pi}\!\left[\sum_{t=0}^{\infty}\gamma^t\big(U^{\pi}(s_t)-\gamma U^{\pi}(s_{t+1})\big)\right].
-\]
-利用贝尔曼方程 \(U^{\pi}(s_t)=\ell(s_t,a_t)+\gamma\mathbb{E}[U^{\pi}(s_{t+1})]\)，可得
-\[
-\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t\ell(s_t,a_t)\right]
-=\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)\right]-\gamma\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_{t+1})\right]
-\le\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)\right].
-\]
-因此
-\[
-\eta_{\hat{M}}(\pi)-\eta_M(\pi)\le2\gamma V_{\max}\beta\,
-\mathbb{E}_{\tau\sim\hat{T},\pi}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)\right].
-\]
-移项即得式(\ref{Eq:Chap3_lowerbound})。若进一步令 \(\tilde{r}_t=r_t-\lambda U^{\pi}(s_t)\) 且有 \(\lambda\ge2\gamma V_{\max}\beta\)，则
-\[
-\eta_{\hat{M},\tilde{r}}(\pi)=\eta_{\hat{M}}(\pi)-\lambda\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)\right]
-\le\eta_{\hat{M}}(\pi)-2\gamma V_{\max}\beta\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)\right]
-\le\eta_M(\pi),
-\]
-最后一个不等式由上述推导得到。定理得证。
+  由 MOPO~\cite{Yu2020MOPO} 的 Telescoping 引理，
+  \begin{equation}
+    \eta_M(\pi)
+    \ge\eta_{\hat{M}}(\pi)-\gamma\,\mathbb{E}_{(s,a)\sim\rho^{\pi}_{\hat{T}}}\left[\left|G^{\pi}_{\hat{M}}(s,a)\right|\right].
+  \end{equation}
+  由总变差距离上界与条件(A1)，
+  \begin{equation}
+    \left|G^{\pi}_{\hat{M}}(s,a)\right|
+    \le2V_{\max}\|\hat{T}(\cdot|s,a)-T(\cdot|s,a)\|_{\mathrm{TV}}
+    \le2V_{\max}\beta\,\ell(s,a).
+  \end{equation}
+  从而
+  \begin{equation}\label{Eq:Chap3_model_gap}
+    \eta_M(\pi)
+    \ge\eta_{\hat{M}}(\pi)-2\gamma V_{\max}\beta\,\mathbb{E}_{\tau\sim(\hat{T},\pi)}\left[\sum_{t=0}^{\infty}\gamma^t\ell(s_t,a_t)\right].
+  \end{equation}
+  又由$U^{\pi}(s)\ge0$可知$\bar{u}^{\pi}(s_t,a_t,s_{t+1})\ge\ell(s_t,a_t)$，结合$\lambda\ge2\gamma V_{\max}\beta$与引理\ref{Lem:Chap3_decomposition}可得
+  \begin{align}
+    \eta_{\hat{M},\tilde{r}_{\lambda}}(\pi)
+    &=\eta_{\hat{M}}(\pi)-\lambda\,\mathbb{E}\left[\sum_{t=0}^{\infty}\gamma^t\bar{u}^{\pi}(s_t,a_t,s_{t+1})\right]\\
+    &\le\eta_{\hat{M}}(\pi)-2\gamma V_{\max}\beta\,\mathbb{E}\left[\sum_{t=0}^{\infty}\gamma^t\ell(s_t,a_t)\right]\\
+    &\le\eta_M(\pi),
+  \end{align}
+  最后一步由式(\ref{Eq:Chap3_model_gap})得到。
 \end{proof}
 
-定理~\ref{Thm:Chap3_performance_bound} 的直接意义是：只要用足够大的 \(\lambda\) 惩罚累积不确定性，在模型上优化的策略的真实性能就不会低于其伪回报。这为使用累积不确定性作为惩罚信号提供了安全保证。
+定理\ref{Thm:Chap3_balance}说明当不确定性能够有效刻画模型误差时，采用“即时不确定性 + 下一状态累积不确定性”作为惩罚项，会将模型中的优化目标压低为真实回报的保守代理目标，从而抑制策略对模型误差的累积。
 
-更重要的是，与仅惩罚单步不确定性 \(\ell(s,a)\) 的 MOPO 相比，累积惩罚的下界可能更紧。直观上，单步惩罚对应的下界为
-\[
-\eta_M(\pi)\ge\mathbb{E}\!\left[\sum\gamma^t\big(r_t-2\gamma V_{\max}\beta\,\ell(s_t,a_t)\big)\right],
-\]
-其惩罚项的期望值为 \(\mathbb{E}[\sum\gamma^t\ell(s_t,a_t)]\)。而累积惩罚下界的惩罚项期望为 \(\mathbb{E}[\sum\gamma^t U^{\pi}(s_t)]\)。由于 \(U^{\pi}(s_t)\) 是对未来 \(\ell\) 的折扣期望，通常有 \(U^{\pi}(s_t)\ge\ell(s_t,a_t)\)，但折扣因子使远期 \(\ell\) 的权重衰减，使得 \(\sum\gamma^t U^{\pi}(s_t)\) 与 \(\sum\gamma^t\ell(s_t,a_t)\) 的差异受到限制。事实上，展开可得
-\[
-\sum_{t=0}^{\infty}\gamma^t U^{\pi}(s_t)=\frac{1}{1-\gamma}\mathbb{E}\!\left[\sum_{t=0}^{\infty}\gamma^t\ell(s_t,a_t)\right]-\cdots,
-\]
-表明累积惩罚虽然没有放松下界的理论最大幅度，但它通过函数 \(U^{\pi}\) 将惩罚前置到状态评估上，使得算法可以用一个可学习的网络 \(u_\phi(s)\) 替代对整条轨迹历史的手工求和，这在实际中提供了更平滑、更稳定的惩罚信号，同时仍维持住性能下界的保证。因此，定理~\ref{Thm:Chap3_performance_bound} 为第三章以 \(u_\phi(s')\) 参与奖励重塑的设计提供了理论正当性。
+\subsection{理论分析小结}\label{Sec3.3.3}
 
-\subsection{自适应权重的分阶段解释}
-
-在上述下界中，惩罚系数 \(\lambda\) 控制风险约束的强度。本文采用 Sigmoid 形状的自适应权重 \(\lambda_k=\lambda_0/(1+e^{K_0-k})\)，其数学性质已知，无需重新证明。这里仅从理论角度指出其作用：在训练早期，\(\lambda_k<\lambda_0\) 使惩罚低于下界要求的阈值，此时算法暂时牺牲部分安全性以换取探索自由度；在训练后期，\(\lambda_k\approx\lambda_0\) 满足（或接近）下界条件，开始对风险区域施加充分惩罚。这种分阶段设计可理解为一种“退火式”的安全探索策略——先放宽约束促进数据利用，待模型和策略趋于稳定后再收紧约束以保证最终策略的稳健性。第\ref{Sec3.4}节的消融实验将验证该机制的实际收益。
-
-\subsection{理论分析小结}
-
-本章的理论贡献可归纳为两点：第一，将累积不确定性诠释为策略评估问题，证明其满足压缩贝尔曼方程，从而保障了用神经网络对其进行监督学习的可行性；第二，在模型误差与不确定性成比例的假设下，证明了基于累积不确定性的惩罚奖励能够形成真实回报的下界，且该下界相对单步惩罚具有结构上的优势，为算法设计提供了比传统方法更灵活的安全保证。自适应权重则作为该下界的时序调节器，进一步提升了算法的实用效能。
+本节从与方法设计最直接相关的角度整理了第三章的理论依据。命题\ref{Prop:Chap3_monotonicity}和命题\ref{Prop:Chap3_upper_bound}说明，累积状态不确定性是历史单步风险的折扣汇总，并在$\omega\in(0,1)$时保持有界，因此可作为稳定的状态风险表征。引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}进一步表明，在误差-不确定性校准条件(A1)下，第三章的奖励重塑能够诱导对真实回报保持保守的代理目标。结合动态权重的阶段性调节，第三章方法在“提升回报”和“抑制模型偏差利用”之间形成了较为完整的理论闭环。
 
 \section{实验验证}\label{Sec3.4}
 
@@ -588,9 +307,9 @@ D_{\rm TV}\big(T(\cdot|s,a)\,\|\,\hat{T}(\cdot|s,a)\big)\le\beta\,\ell(s,a).
 
 本节介绍实验所采用的数据集、实现细节和基线方法。
 
-在数据集选择方面，本章在D4RL基准\cite{Fu2020D4RL}的MuJoCo连续控制任务上进行评估。D4RL是基于MuJoCo物理仿真器\cite{Todorov2012MuJoCo}构建的离线强化学习标准评测平台。本章选取halfcheetah、hopper、walker2d三种机器人控制环境，每种环境包含三种数据质量的数据集：（1）随机（random）数据集，通过随机策略执行100万步收集；（2）中等（medium）数据集，通过性能约为专家策略1/3的中等策略收集；（3）专家（medium-expert）数据集，中等策略数据与专家策略数据的混合。所有数据集均采用v2版本。
+本章在D4RL基准\cite{Fu2020D4RL}的MuJoCo连续控制任务上进行评估。D4RL是基于MuJoCo物理仿真器\cite{Todorov2012MuJoCo}构建的离线强化学习标准评测平台。本章选取halfcheetah、hopper、walker2d三种机器人控制环境，每种环境包含三种数据质量的数据集：（1）随机（random）数据集，通过随机策略执行100万步收集；（2）中等（medium）数据集，通过性能约为专家策略1/3的中等策略收集；（3）专家（medium-expert）数据集，中等策略数据与专家策略数据的混合。所有数据集均采用v2版本。
 
-在实验实现方面，本章采用以下超参数设置：转移模型为3层MLP，隐藏维度256；环境模型探索步数$t_{max} = 5$；基础惩罚系数$\lambda_0 = 0.5$；折扣因子$\omega = 0.5$；状态不确定性权重$\alpha = 0.5$；转折点$K_0 = 10000$；策略优化采用SAC\cite{Haarnoja2018SAC}算法，学习率为$3 \times 10^{-4}$，批次大小为256。所有实验在5个随机种子上运行，报告归一化分数的均值和标准差。归一化分数采用D4RL标准程序\cite{Fu2020D4RL}，其中0分对应随机策略，100分对应专家策略。
+本章采用以下超参数设置：转移模型为3层MLP，隐藏维度256；环境模型探索步数$t_{max} = 5$；基础惩罚系数$\lambda_0 = 0.5$；折扣因子$\omega = 0.5$；状态不确定性权重$\alpha = 0.5$；转折点$K_0 = 10000$；策略优化采用SAC\cite{Haarnoja2018SAC}算法，学习率为$3 \times 10^{-4}$，批次大小为256。所有实验在5个随机种子上运行，报告归一化分数的均值和标准差。归一化分数采用D4RL标准程序\cite{Fu2020D4RL}，其中0分对应随机策略，100分对应专家策略。
 
 在基线方法方面，本章与以下算法进行对比：（1）基于模型离线强化学习：MOPO\cite{Yu2020MOPO}；（2）无模型离线强化学习：BC（行为克隆）\cite{Torabi2018BC}、CQL\cite{Kumar2020CQL}、IQL\cite{Kostrikov2022IQL}。基线方法的结果引用自各原论文报告的标准评估结果。
 
@@ -635,14 +354,14 @@ D_{\rm TV}\big(T(\cdot|s,a)\,\|\,\hat{T}(\cdot|s,a)\big)\le\beta\,\ell(s,a).
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.7\textwidth]{figures/uncertainty_boxplot.pdf}
+  \includegraphics[width=0.7\textwidth]{figures/boxplot.pdf}
   \caption{不同推演步数状态的不确定性分布。横轴为智能体在环境模型中的推演步数，纵轴为累积不确定性$u_\phi(s)$。$t=0$为离线数据集中的真实状态，$t \geq 1$为模型生成的状态。箱体表示四分位距，中线表示中位数。}
   \label{Fig:Chap3_uncertainty_evaluation}
 \end{figure}
 
 从图\ref{Fig:Chap3_uncertainty_evaluation}可以观察到清晰的规律：离线数据集中的状态（$t=0$）具有最低的不确定性。这些状态直接从真实环境中采集，未经过模型推演，因此累积不确定性被初始化为0，预测值也相应较低，验证了不确定性预测网络能够正确识别分布内状态。
 
-随着推演步数$t$的增加，状态的累积不确定性呈现明显的上升趋势。$t=1$时的中位数约为0.3，$t=3$时增至约0.7，$t=5$时达到约1.0，符合命题\ref{Prop:Chap3_monotonicity}的理论预期：模型推演步数越多，累积的预测误差越大，状态逐渐偏离离线数据的覆盖范围。
+随着推演步数$t$的增加，状态的累积不确定性呈现明显的上升趋势。$t=1$时的中位数约为0.3，$t=3$时增至约0.7，$t=5$时达到约1.0。这与命题\ref{Prop:Chap3_monotonicity}中的折扣累积表示一致：额外的模型推演会持续引入新的单步不确定性项，因此平均累积风险随推演深度增加而整体升高，状态也逐步偏离离线数据的高密度覆盖区域。
 
 不确定性的增长呈现渐进饱和的特点。在$t > 3$后，不确定性的增速逐渐放缓，箱体间的距离缩小。这是由于折扣因子$\omega = 0.5$的作用——早期的不确定性贡献随时间衰减，使累积不确定性趋于稳定。
 
@@ -674,7 +393,7 @@ D_{\rm TV}\big(T(\cdot|s,a)\,\|\,\hat{T}(\cdot|s,a)\big)\le\beta\,\ell(s,a).
   \end{tabular}
 \end{table}
 
-从表\ref{Tab:Chap3_ablation}可以验证各组件的有效性：完整方法在大多数数据集上取得最优性能，验证了同时使用累积状态不确定性和自适应权重的必要性。两种机制相互补充——累积状态不确定性提供了更全面的风险评估，自适应权重实现了探索-保守的动态平衡。在6个任务上，完整方法取得了最优或第二优的性能。
+从表\ref{Tab:Chap3_ablation}可以验证各组件的有效性：完整方法在大多数数据集上取得最优性能，说明同时使用累积状态不确定性和自适应权重具有必要性。两种机制相互补充，前者提供更全面的风险评估，后者实现探索与保守之间的动态平衡。在6个任务上，完整方法取得了最优或第二优的性能。
 
 仅使用状态不确定性在部分任务上优于MOPO，但效果不如完整方法稳定。例如在walker2d-medium任务上，仅状态不确定性取得53.3分，优于MOPO的25.7分，但低于完整方法的74.5分。这表明静态的不确定性权重无法充分适应策略优化的动态需求。
 
@@ -685,10 +404,10 @@ D_{\rm TV}\big(T(\cdot|s,a)\,\|\,\hat{T}(\cdot|s,a)\big)\le\beta\,\ell(s,a).
 
 \section{本章小结}\label{Sec3.5}
 
-本章详细介绍了基于自适应不确定性度量的离线强化学习算法。首先分析了现有基于模型离线强化学习方法在不确定性估计方面的局限性，阐明了引入累积状态不确定性度量和自适应动态权重机制的核心思想：累积不确定性度量综合考虑状态转移不确定性和状态本身的累积不确定性，使智能体能够更全面地评估决策风险；自适应权重机制根据策略优化进程动态调节惩罚强度，实现探索与保守的自适应平衡。
+本章围绕基于自适应不确定性度量的离线强化学习算法展开。首先分析现有基于模型的离线强化学习方法在不确定性估计方面的局限，进而引出累积状态不确定性度量与自适应动态权重机制：前者综合考虑状态转移不确定性及其沿轨迹的累积效应，使智能体能够更全面地评估决策风险；后者根据策略优化进程动态调节惩罚强度，在探索与保守之间保持更自然的平衡。
 
-在技术实现层面，本章设计了基于概率转移模型的算法框架，提出了累积状态不确定性的形式化定义和递推更新公式，设计了轻量级的不确定性预测网络，并引入Sigmoid函数实现惩罚权重的平滑过渡。在理论分析层面，本章聚焦与方法直接对应的核心结论：（1）给出累积不确定性的递推下界性质（命题\ref{Prop:Chap3_monotonicity}），说明该度量在多步推演中能够持续携带历史风险信息；（2）给出累积不确定性的上界（命题\ref{Prop:Chap3_upper_bound}），保证算法的数值稳定性；（3）通过惩罚MDP期望回报分解（引理\ref{Lem:Chap3_decomposition}）和自适应权重平衡性分析（定理\ref{Thm:Chap3_balance}），解释了动态权重在训练不同时期调节“回报提升—风险约束”权衡的作用机制。
+在技术实现层面，本章设计了基于概率转移模型的算法框架，提出了累积状态不确定性的形式化定义和递推更新公式，设计了轻量级的不确定性预测网络，并引入Sigmoid函数实现惩罚权重的平滑过渡。在理论分析层面，本章聚焦与方法直接对应的核心结论：（1）通过命题\ref{Prop:Chap3_monotonicity}和命题\ref{Prop:Chap3_upper_bound}说明累积不确定性是历史单步风险的折扣汇总，且在$\omega\in(0,1)$时保持有界，从而兼顾风险表征能力与数值稳定性；（2）通过引理\ref{Lem:Chap3_decomposition}和定理\ref{Thm:Chap3_balance}说明在误差-不确定性校准条件下，本文奖励重塑可诱导对真实回报保守的代理目标；（3）从阶段性调节角度解释了动态权重在训练早期放宽约束、后期强化保守性的作用机制。
 
-在实验验证层面，本章在D4RL MuJoCo基准的9个任务上进行了系统评估。主实验结果表明，本章方法在6个任务上取得最优或接近最优性能，在数据质量较差的随机数据集上相比MOPO取得了显著提升，在hopper-medium任务上提升幅度达44.4个百分点。累积不确定性度量的有效性验证实验表明，不确定性预测网络能够准确区分分布内外状态，累积不确定性随推演步数单调增加。消融实验验证了累积状态不确定性和自适应权重机制的各自贡献及其协同效应。
+在实验验证层面，本章在D4RL MuJoCo基准的9个任务上进行了系统评估。主实验结果表明，本章方法在6个任务上取得最优或接近最优性能，在数据质量较差的随机数据集上相比MOPO取得了显著提升，在hopper-medium任务上提升幅度达44.4个百分点。累积不确定性度量的有效性验证实验表明，不确定性预测网络能够准确区分分布内外状态，且其估计值会随模型推演深度增加而整体升高。消融实验验证了累积状态不确定性和自适应权重机制的各自贡献及其协同效应。
 
 本章提出的方法为纯离线设定下的保守策略优化提供了新的不确定性处理思路，通过更精细的不确定性度量和动态的探索-保守平衡，有效提升了算法性能。然而，该方法仍然局限于纯离线设定，无法主动扩展离线数据的覆盖范围。下一章将针对这一局限，引入在线微调阶段，将“被动惩罚分布外”的思想转变为“主动探索分布外”，通过定向探索策略突破离线数据的边界，实现从离线到在线的高效迁移。

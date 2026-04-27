@@ -67,8 +67,8 @@ do_build() {
 	clean)
 		log "Cleaning auxiliary files..."
 		clean_aux "$DOCS_DIR"
-		clean_aux "$DOCS_DIR/NJUPT_Professional_Thesis_draft1"
-		clean_aux "$DOCS_DIR/NJUPT_Professional_Thesis_draft1/chapters"
+		clean_aux "$DOCS_DIR/NJUPT_Professional_Thesis_draft"
+		clean_aux "$DOCS_DIR/NJUPT_Professional_Thesis_draft/chapters"
 		log "Cleanup complete ✓"
 		;;
 	*)

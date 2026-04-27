@@ -94,6 +94,12 @@
 %(其后部分无编号)
 \backmatter
 
+% 重定义后置附录标题编号（仅当前文档生效）
+\makeatletter
+\renewcommand{\NJUPT@label@publications}{附录A 攻读专业学位硕士期间撰写的论文}
+\renewcommand{\NJUPT@label@publicationsProjects}{附录B 攻读专业学位硕士期间参加的科研项目}
+\makeatother
+
 % 程序清单
 % \include{chapters/ProgramList}
 % 发表文章目录
@@ -102,7 +108,7 @@
 % \include{chapters/pat}
 % 参与项目目录
 \include{chapters/pro}
-% % 致谢
+% 致谢
 \include{chapters/thanks}
 
 \end{document}
