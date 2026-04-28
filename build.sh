@@ -46,14 +46,41 @@ build_with_bib() {
 	log "$name.pdf successfully generated ✓"
 }
 
+# IEEE conference paper build pipeline:
+# 1. pdflatex IEEE_DEM_Paper.tex
+# 2. bibtex IEEE_DEM_Paper
+# 3. pdflatex IEEE_DEM_Paper.tex
+# 4. pdflatex IEEE_DEM_Paper.tex
+build_ieee_paper() {
+	local tex="$1"
+	local name="${tex%.tex}"
+	log "Compiling IEEE paper $tex (with BibTeX)..."
+	pdflatex -interaction=nonstopmode -halt-on-error "$tex" >/dev/null 2>&1 || {
+		err "Pass 1 failed for $tex."
+		return 1
+	}
+	bibtex "$name" >/dev/null 2>&1 || warn "bibtex generated warnings for $name."
+	pdflatex -interaction=nonstopmode -halt-on-error "$tex" >/dev/null 2>&1 || {
+		err "Pass 2 failed for $tex."
+		return 1
+	}
+	pdflatex -interaction=nonstopmode -halt-on-error "$tex" >/dev/null 2>&1 || {
+		err "Pass 3 failed for $tex."
+		return 1
+	}
+	log "$name.pdf successfully generated ✓"
+}
+
 usage() {
 	echo "Usage: $0 <target...>"
 	echo ""
 	echo "  njupt    Compile NJUPT master's thesis (with BibTeX)"
+	echo "  jcc      Compile IEEE JCC conference paper (with BibTeX)"
 	echo "  clean    Clean compilation auxiliary files"
 	echo ""
 	echo "Example:"
 	echo "  ./build.sh njupt"
+	echo "  ./build.sh jcc"
 }
 
 do_build() {
@@ -64,11 +91,18 @@ do_build() {
 		build_with_bib NJUPT_Professional_Thesis_d1.tex
 		cd "$DOCS_DIR"
 		;;
+	jcc)
+		local jcc_dir="$DOCS_DIR/JCC_2026"
+		cd "$jcc_dir"
+		build_ieee_paper IEEE_DEM_Paper.tex
+		cd "$DOCS_DIR"
+		;;
 	clean)
 		log "Cleaning auxiliary files..."
 		clean_aux "$DOCS_DIR"
 		clean_aux "$DOCS_DIR/NJUPT_Professional_Thesis_draft"
 		clean_aux "$DOCS_DIR/NJUPT_Professional_Thesis_draft/chapters"
+		clean_aux "$DOCS_DIR/JCC_2026"
 		log "Cleanup complete ✓"
 		;;
 	*)

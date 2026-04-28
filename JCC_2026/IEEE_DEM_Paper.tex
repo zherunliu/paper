@@ -1,0 +1,405 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+%Template version as of 6/27/2024
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{amsthm}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{url}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+
+\title{Offline-to-Online Reinforcement Learning with Directed Exploration Models}
+
+\author{\IEEEauthorblockN{Anonymous Submission}
+\IEEEauthorblockA{For Double-Blind Review}
+}
+
+\maketitle
+
+\begin{abstract}
+Due to the high cost of exploration in real-world settings, offline reinforcement learning (RL) has become an appealing option for training agents using historical data. However, the restricted coverage of offline datasets may lead to unreliable decisions in unseen states, which calls for the necessity of online fine-tuning to adapt to real environments. Regarding this problem, previous works have focused on ensuring a smooth transition from offline to online RL, but often overlooked how to collect informative samples with minimal interactions. In this work, we propose a novel offline-to-online RL algorithm with Directed Exploration Models (DEM). DEM explicitly leverages a model-based approach to direct the policy to explore regions with high uncertainty and high action values, where high uncertainty regions complement the transition model and high action values facilitate policy optimization. By integrating offline and online data, DEM retains the advantages of fast and cost-effective training of offline RL, while efficiently utilizing online samples. Both theoretical and empirical studies demonstrate the effectiveness of our approach. Experiments conducted on the D4RL benchmark reveal that DEM outperforms most existing offline-to-online RL and model-based offline RL methods.
+\end{abstract}
+
+\begin{IEEEkeywords}
+offline reinforcement learning, directed exploration, model-based learning, online fine-tuning, distribution shift
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+Offline reinforcement learning \cite{RL} (RL), which can be directly optimized with historical trajectories, has recently achieved promising results in decision-making problems where exploration is costly or even dangerous, such as robot control \cite{robot}, autonomous driving \cite{autodriving}, and healthcare \cite{rlinclinical}. A primary challenge in offline RL is the distribution shift \cite{distrshift}, which arises from the discrepancy between the distribution of the training dataset and that of the online environment. This distribution shift often leads to overestimation of out-of-distribution action values, thereby causing performance degradation. To improve the performance of offline RL policies in specific environments while retaining the fast and cost-effective training benefits of offline RL, offline-to-online RL has recently drawn attention, where the policy is first trained on offline behavior datasets, and subsequently fine-tuned through limited online interactions with the environment, enabling more robust policy adaptation.
+
+\begin{figure}[!tbp]
+  \centering
+  \includegraphics[width=6cm]{images/maze.pdf}
+  \caption{An illustrative of our motivation. The shaded area represents the transition model's data distribution. Non-shaded areas are considered with high uncertainty. The regions closer to the target state has higher action values. }
+  \label{fig1}
+\end{figure}
+
+When fine-tuning the policy with online interactions, the discrepancy between the offline dataset and online interactions often leads to unstable behaviors of the policy. To bridge the gap between the offline policy and the online environment, current approaches typically enhance the conservatism of RL algorithms during the offline phase, and then relax regularization or pessimistic terms in the online phase to balance exploration and exploitation \cite{e2o}. Alternatively, prioritized sampling during fine-tuning were adopted to bring the policy closer to the offline data, facilitating a smoother transition between offline and online data \cite{balancedreplay,awac,pex}.
+
+Although these approaches can alleviate the distribution shift and offer relatively safe exploration, their conservativeness during the offline phase also hinders flexibility during the online phase, preventing the policy from effectively adapting to new data. Moreover, since most offline-to-online RL methods are model-free, they require frequent access to the online environment (typically 200k steps), which incurs high costs and fails to make full use of the available offline data. In contrast, recent advances in model-based RL suggest that the credibility of models can be relatively assured \cite{mopo,rambo,combo,yang2023model,sun2024conformal}, which motivates us to explore a model-based offline-to-online RL algorithm that can effectively leverage both offline and online data. To fully utilize the online data, we need to complement the transition model with effective samples that require minimal interactions. As presented in Figure \ref{fig1}, when collecting online samples, the right arrow can guide online trajectory to regions with high uncertainty (out of transition model) and high action values (close to the target).
+
+In this work, we propose an offline-to-online RL algorithm with directed exploratory models (DEM). The core idea is to explicitly guide the policy to explore regions with high uncertainty and high state-action values during the online phase. Exploring high-uncertainty regions helps to improve the generalization of the transition model, while focusing on high action value areas ensures that the collected samples are informative and beneficial for policy optimization. In essence, we adopt an iterative approach: during the offline phase, a transition model is trained to conservatively update the policy; in the online interaction phase, the policy is directed to gather additional samples. Furthermore, we introduce an adaptive weight to emphasize uncertainty during the early learning stages and stability in later stages, thereby smoothly adjusting the policy to meet the dynamic demands of online exploration. Both theoretical and empirical studies demonstrate the effectiveness of our approach. Experiments conducted on the D4RL benchmark \cite{d4rl} reveal that DEM outperforms existing offline-to-online RL and model-based RL methods in most cases.
+
+In summary, the main contributions of our work are as follows:
+\begin{itemize}
+\item We propose an offline-to-online RL method with directed exploratory model, which can collect informative samples for online fine-tuning.
+\item A dynamically adaptive weight is introduced to smooth the online interaction process, and gradually guide the policy to explore high action value regions.
+\item Through experiments, we demonstrate that DEM performs well on the widely used D4RL benchmark for RL evaluation with very limited online interactions.
+\end{itemize}
+
+\section{Related Works}
+
+\subsection{Offline RL}
+Offline RL learns a policy from offline datasets without interacting with the environment, and can be broadly classified into model-free and model-based methods. The former directly optimizes the policy using offline data, while the latter first learns an environment (transition) model from the offline data and then uses the model to train the policy. The key of the methods is to address the distribution shift problem, which arises from the discrepancy between the offline dataset and the online environment.
+
+In \textbf{model-free offline RL}, researchers typically incorporate conservatism into the value function or directly constrain the policy to avoid overestimating the value of out-of-distribution actions \cite{wu2019behavior,xu2022policy,kumar2019stabilizing,mcq,iql}. For example, CQL \cite{cql} introduced a regularization term to penalize actions with values exceeding the estimates from the offline data; BCQ \cite{wu2019behavior} combined imitation and Q-learning to learn a policy constrained by the offline data distribution through a generative model. As model-free methods can not generate new data samples, they often suffer from low sample efficiency problem.
+
+\textbf{Model-based offline RL}, on the other hand, begins by constructing a transition model. The policy can then be optimized by interacting with this model \cite{mbpo,mopo,wang2021offline,lu2024synthetic}. However, there may be significant extrapolation errors when estimating out-of-distribution data \cite{extraerror}, leading to compounded errors. Thus, model-based offline RL approaches focus on exploring out-of-distribution data while maintaining conservatism. For instance, COMBO \cite{combo} used conservative policy evaluation, and RAMBO \cite{rambo} improved conservatism through adversarial training of a pessimistic model. MOPO \cite{mopo} penalized reward with estimated uncertainty to avoid overestimation. MOREL \cite{morel} limited overestimation of state transitions by constructing a pessimistic Markov decision process. Recent studies \cite{sun2024conformal,zhou2024diffusion} have also incorporated diffusion model to improve the robustness of the model. While these methods help alleviate extrapolation errors to some extent, they still struggle to adequately evaluate and supplement out-of-distribution data, calling for the necessity of collecting more informative samples.
+
+\subsection{Offline-to-Online RL}
+Offline-to-online RL often faces the challenge of catastrophic forgetting, where the pre-trained policy struggles to adapt to the online environment and rapidly forgets old knowledge when learning new tasks. Most current methods address this by using more conservative offline RL algorithms during the offline phase and reducing pessimism \cite{e2o}, or smoothing the transition between offline and online data through prioritization or similar techniques during the online fine-tuning phase \cite{balancedreplay}. AWAC \cite{awac} enforced policy imitation of actions with high advantage estimates in the dataset, while PEX \cite{pex} used an extended policy to avoid inappropriate actions. More recently, Cal-QL \cite{calql} has employed conservative algorithms, such as CQL \cite{cql}, as a lower bound for the policy's outcomes to prevent performance loss during the online fine-tuning phase. However, these methods are still not sufficiently flexible in balancing conservatism and exploration, and model-free offline settings fail to fully leverage the information inherent in the offline dataset.
+
+\section{Preliminaries}
+
+\subsection{Markov Decision Process}
+
+A Markov decision process (MDP) is defined by the tuple \( M = (\mathcal{S}, \mathcal{A}, T, r, \mu_0, \gamma) \). \( \mathcal{S} \) and \( \mathcal{A} \) denote the state and action spaces respectively, \( r(s, a) \) is the reward function, \( T(s'|s, a) \) is the transition function, \( \mu_0 \) is the initial state distribution, and \( \gamma \in (0, 1) \) is the discount factor. %In this work we consider Markovian policies, \( \pi(a|s) \), which map from each state to a distribution over actions.
+
+The state value function \( V_M^\pi(s) \), also known as the V-value function, represents the expected discounted return obtained by following policy \( \pi \) starting from state \( s \) in the MDP \( M \):
+\(
+V_M^\pi(s) = \mathbb{E}_{\pi, M}\left[\sum_{t=0}^\infty \gamma^t r(s_t, a_t)\right]
+\) .
+The expected discounted return, denoted \( \eta_M^\pi \), can be obtained by calculating the expectation of the state value function under the initial state distribution \( \mu_0 \):
+\(
+\eta_M^\pi = \mathbb{E}_{s \sim \mu_0}[V_M^\pi(s)]
+\).
+The goal in an MDP is to find a policy that maximizes \( \eta_M^\pi \).
+
+The state-action value function \( Q_M^\pi(s, a) \), or Q-value, represents the expected discounted return when action \( a \) is taken in state \( s \), followed by the execution of policy \( \pi \). We use \( \rho_M^\pi(s, a) \) to denote the (improper) discounted state-action visitation distribution under policy \( \pi \), defined as
+\(
+\rho_M^\pi(s, a) = \pi(a|s) \sum_{t=0}^\infty \gamma^t P(s_t = s | \pi, M)
+\),
+where \( P(s_t=s | \pi, M) \) is the probability of reaching state \( s \) at time \( t \) by following policy \( \pi \) in \( M \). The expected discounted return can be represented as
+\(
+\eta_M^\pi = \mathbb{E}_{\rho_M^\pi} \left[ r(s, a) \right]
+\).
+We also define the normalized state-action visitation distribution as:
+\(
+\tilde{\rho}_M^\pi(s, a) = (1 - \gamma) \cdot \rho_M^\pi(s, a)
+\).
+
+\subsection{Model-based Offline RL}
+
+In offline RL, the agent can only interact with a static logging dataset $\mathcal{D}_{off} = \{(s_i, a_i, s_i', r_i)\}_{i=1}^N$ collected by the behavior policy $\pi_D$. To optimize the policy, model-based offline RL initially constructs a transition model $\hat{T}_{\theta}(s', r|s, a)$ through supervised learning. This model predicts the next state $s'$ and reward r based on the current state $s$ and action $a$. The transition model is typically represented as a Gaussian distribution $\hat{T}_{\theta}(s', r|s, a) = \mathcal{N}(\mu_{\theta}(s, a),\Sigma_{\theta}(s, a))$, where $\mu_{\theta}(s, a)$ represents the mean of the distribution, and $\Sigma_{\theta}(s, a)$ represents the variance. Subsequently, the policy can be optimized directly by interacting with the supervised transition model. As a result, model-based methods are more sample-efficient, particularly when data collection is challenging. However, the disparity between the real-world and the supervised transition model will accumulate extrapolation error, thereby leading to the distribution shift problem. Therefore, reducing the overestimation of out-of-distribution data is very important in model-based offline RL.
+
+\section{Method}
+In this section, we present our directed exploration models (DEM) in detail. The core idea is to guide the offline policy to explore regions with high uncertainty and high action values. New samples collected during online interactions are then combined with the offline samples to update the model.
+
+\subsection{Directed Exploration Models}
+In the offline phase, we first pre-train the policy using the offline dataset \( \mathcal{D}_{off} \), along with dynamics models. The dynamics models are trained to predict the next state and reward, while the policy is trained to maximize the expected return.
+
+In the online phase, we interact with the real environment to collect more samples. The collected samples can then be combined to fine-tune the transition model. Due to the high-cost of interactions, we need to ensure that the collected samples are informative and beneficial for policy optimization. By default, as the pre-trained policy is conservative, the samples collected are likely to be concentrated in low-uncertainty regions. To improve the generalization of the transition model, we direct the policy to explore regions with high uncertainty and high action values. Intuitively, high-uncertainty regions complement the transition model, while high action values facilitate policy optimization. Figure \ref{fig2} illustrates the process of directed exploration.
+
+In specific, we augment the Q-value with the uncertainty estimate of the state-action pair, while
+maintaining a collection policy $\pi_{\varphi}$ that updates as follows:
+%
+\begin{equation}
+\begin{aligned}
+  &\nabla_{\varphi}J_{\pi}(\varphi) \\
+  &= \mathbb{E}_{(s,a)\sim \mathcal{D}_{on}} \Big[ \nabla_{\varphi}\log \pi_\varphi(a|s) \big( cu(s,a) + Q(s,a) \big) \Big],
+\label{equa3}
+\end{aligned}
+\end{equation}%
+where \( u \) represents the uncertainty estimate, \( c \) is a hyperparameter to adjust the weight of the two parts.
+
+According to the above equation, the policy is updated to maximize the expected return while incorporating the uncertainty estimate of the state-action pair. Let $\mathcal{D}_{on}$ be the set of samples by online interactions. It can be proved the transition model can achieve a higher convergence rate under the uncertainty-compensated reward as long as the transition function is piecewise constant \cite{willett2005faster}. Intuitively, piecewise constant functions can be thought of as a function that "jumps" one constant value to another at specific points or along certain sets. In many real-world scenarios, functions can exhibit piecewise constant behavior. For example, in some physical systems where there are distinct regions with different constant properties, the corresponding mathematical model might be a piecewise constant function. For the transition model, the agent often encounters different dynamics in different regions of the state-action space, leading to piecewise constant behavior in the model.
+
+\begin{figure}[!tbp]
+  \centering
+  \includegraphics[width=8cm]{images/totofig.pdf}
+  \caption{Directed exploration in the online process. The dashed ellipses indicate the coverage of the transition model trained in different iterations. The area outside the dashed ellipse is the out-of-distribution region with high uncertainty. The orange region has high action value. DEM aims to collect samples that are in the orange region, but out of the ellipses.}
+  \label{fig2}
+\end{figure}
+
+\begin{corollary}
+\cite{willett2005faster} Suppose the transition function is a piecewise constant function. Then the error reduction rate that the transition function $\hat{T}$ can achieve has a lower bound :
+
+\begin{equation}
+  \inf_{\hat{T}} \sup_{T\in \text{PC}(\beta, M)}  \mathbb{E}_f[\|\hat{T}-T \|^2] \geq c|\mathcal{D}_{on}|^{-\frac{1}{d-1}},
+\end{equation}
+where $c>0$ is a constant related to the complexity of region
+$\mathcal{D}_{on}$, $d$ is the intrinsic dimension of $\mathcal{D}_{on}$, and $\text{PC}(\beta, M)$ is the set of piecewise constant functions.
+\end{corollary}
+
+According to the corollary above, the error is bounded by the intrinsic dimension $d$ and the number of samples in $|\mathcal{D}_{on}|$. The error reduction rate is inversely proportional to the intrinsic dimension $d-1$, which is lower than uniform sampling strategy: $c|\mathcal{D}_{on}|^{-\frac{1}{d}}$ \cite{korostelev1999minimax}. This result suggests that the transition model can be updated more effectively by collecting samples with high uncertainty.
+
+\subsection{Dynamic Weight Adaptation}
+
+In our approach, the uncertainty estimation \(u\) differs between the offline and online phases. This is because aleatoric uncertainty always exists, whereas epistemic uncertainty can be reduced during online exploration by collecting additional samples.
+
+In the offline phase, the environment dynamics are modeled as a Gaussian distribution:
+\(
+\hat{T}_\phi(s', r|s,a) = \mathcal{N}\!\big(\mu_\phi(s,a), \Sigma_\phi(s,a)\big)
+\),
+and we use an ensemble of \(N\) independently trained models
+\(
+\{\hat{T}^i_\phi = \mathcal{N}(\mu^i_\phi, \Sigma^i_\phi)\}_{i=1}^N
+\).
+We consider the Gaussian predictive variance \(\Sigma^i_\phi(s,a)\) as a measure of aleatoric uncertainty.
+Following MOPO~\cite{mopo}, we define the offline uncertainty estimator as:
+%
+\begin{equation}
+u_{\text{offline}}(s,a) = \max_{i=1,\dots,N} \left\| \Sigma^i_\phi(s, a) \right\|_F,
+\label{eq:offline_uncertainty}
+\end{equation}
+%
+where \(\|\cdot\|_F\) denotes the Frobenius norm, capturing the standard deviation predicted by each model on the input \((s,a)\).
+
+In the online phase, the goal is to actively explore high epistemic-uncertainty regions to complement the transition model.
+Beyond the offline estimator \eqref{eq:offline_uncertainty}, we additionally consider the disagreement among the ensemble's mean predictions.
+For the predicted means \(\mu^i_\phi(s,a)\) from each model, we define the disagreement variance as:
+%
+\begin{equation}
+\mathrm{DisVar}(s,a) =
+\frac{1}{d}\sum_{j=1}^d \mathrm{Var}_{i=1,\dots,N}\!\big[\mu^i_{\phi,j}(s,a)\big],
+\end{equation}
+%
+where \(d\) is the dimension of the predicted state-reward vector, and \(\mathrm{Var}_i\) denotes the variance over the ensemble.
+The final online uncertainty estimator is thus given by:
+%
+\begin{equation}
+u_{\text{online}}(s,a) =
+\max_{i=1,\dots,N} \left\| \Sigma^i_\phi(s, a) \right\|_F
+\; + \;
+\sqrt{\mathrm{DisVar}(s,a)}.
+\label{eq:online_uncertainty}
+\end{equation}
+
+In Equation \ref{equa3}, $Q(s,a)$ and $u(s, a)$ terms have different magnitudes across domains due to variations in state and reward scales. To facilitate the adjustment of uncertainty weights \( c \) for different domains, we perform the following normalization process. In the offline phase, we compute the mean and standard deviation of the $\mathbb{E}_{s, a\sim \mathcal{D}_{off}}[Q(s, a)]$ and $\mathbb{E}_{s, a\sim \mathcal{D}_{off}}[u(s, a)]$ for the state-action pairs in \( \mathcal{D}_{off} \). Then, during the online phase, the  computed values for the state-action pairs are normalized by subtracting the mean and dividing by the standard deviation. This normalization ensures that the values are on a comparable scale, making it easier to adjust the uncertainty weight \( c \) across different domains. Based on the magnitude of the average values, we decrease balancing factor smoothly with policy update steps \( k \) as follows:
+\begin{equation}
+\label{eqa4}
+    c = c_0 \cdot \frac{1}{1 + e^{(k - k_0)\nu}},
+\end{equation}
+where $\nu$, $k_0$ and $c_0$ are hyperparameters that can be selected by the user to control the rate and position of weight change. Specifically, $\nu$ controls the rate at which $c$ transitions from its initial value towards the target value; a larger $k$ results in a faster adjustment. $k_0$ is an offset parameter that determines the midpoint of the weight change, meaning that $c$ reaches the halfway point of its adjustment when $k=k_0$. This strategy provides a higher weight for uncertainty in the early stages of training, and gradually shifts the focus towards expected returns. Focusing on the high action value regions is beneficial for obtaining higher return, and can be theoretically justified. The proof is provided in the Appendix\ref{b}.
+
+\begin{lemma}
+Suppose the collected samples have higher action values than the average of the offline dataset. Then the expected return of the updated policy $\pi_{on}$ is at least as high as the offline policy $\pi_{off}$ in the real environment, i.e., $\eta_M^{\pi_{on}} \geq \eta_M^{\pi_{off}}$.
+\end{lemma}
+
+\subsection{Practical Implementation}
+We outline the practical implementation of DEM in Algorithm \ref{algo1}. As presented, the algorithm consists of offline and online stages. In the offline stage, we train the transition model and offline policy using the MOPO framework (Line 6). In the online stage, we interact with the real environment to collect new samples. By directing the collection policy to explore regions with high uncertainty and high action values, we collect informative samples that can complement the transition model and facilitate policy optimization (Line 11-15). The policy is then updated using the collected samples, and the uncertainty weight is dynamically adjusted to balance exploration and exploitation (Line 16-18). By combining offline and online data, we can effectively update the transition model and policy (Line 20-22), thereby achieving better performance.
+
+\begin{algorithm}[!tb]
+\caption{Offline-to-Online Reinforcement Learning with Directed Exploration Models(DEM)}
+\begin{algorithmic}[1]
+  \STATE \textbf{INPUT}: Offline dataset $\mathcal{D}_{off}$, learning rate $\alpha$;
+    \STATE \textbf{OUTPUT}: Policy $\pi_{on}$;
+    \STATE Randomly initialize parameters $\varphi, \phi, \theta$;
+    \STATE Initialize hyperparameters $\nu, k_0$; Set $k=0$;
+    \STATE \textcolor{blue}{\textit{\# offline stage:}}
+    \STATE Train MOPO with $\mathcal{D}_{off}$, obtain $\{\hat{T}_\phi^i\}_{i=1}^N$ and sample collection policy $\pi_{\varphi} = \pi_{off}$; \\
+    \STATE \textcolor{blue}{\textit{\# online stage:}}
+    \FOR{$iteration = 0,1,2,\dots$}
+        \FOR{$epoch = 0,1,2,\dots$}
+            \STATE Sample state $s_0$ from the online environment;
+            \FOR{$t = 0,1,2,\dots$}
+              \STATE Sample action according to $a_t = \pi_{\varphi}(s_t)$;
+              \STATE Execute $a_t$, get reward $r_t$ and next state $s_{t+1}$;
+              \STATE Add sample $(s_t, a_t, r_t, s_{t+1})$ to $\mathcal{D}_{on}$;
+            \ENDFOR
+            \STATE Update policy parameters according to Equation \ref{equa3};
+            \STATE $k=k+1$;
+            \STATE Update uncertainty weight $c$ according to Equation \ref{eqa4};
+        \ENDFOR
+        \STATE Update model $\{\hat{T}_\phi^i\}_{i=1}^N$ with $\mathcal{D}_{off} \cup \mathcal{D}_{on}$;
+    \ENDFOR
+    \STATE Randomly draw samples from $\mathcal{D}_{off} \cup \mathcal{D}_{on}$, use SAC to optimize $\pi$.
+    \end{algorithmic}
+    \label{algo1}
+\end{algorithm}
+
+In practice, we build an ensemble of $K$ regression models. The uncertainty of the transition model is quantified using the maximum standard deviation across the ensemble $u(s, a) = \max_{i=1}^K \|\Sigma_{\theta}^i(s, a)\|_F$ \cite{mopo}. The hyperparameters \( \nu \) and \( k_0 \) can be selected by the user to control the rate and position of weight change. The algorithm is terminated when the policy converges or the maximum number of iterations is reached.
+
+\section{Experiments}
+In our experiments, we designed our experiments to answer the following questions:
+\begin{itemize}
+\item How does DEM compare with existing offline-to-online RL and model-based RL approaches?
+\item Does the uncertainty-guided modeling approach really focus on the regions we expect?
+\item Does the dynamic weight adaptation method contribute to the final performance?
+\end{itemize}
+
+\begin{table*}[!tb]
+  \centering
+  \begin{tabular}{llrrrrrrrr}
+    \toprule
+    \textbf{Dataset type} & \textbf{Environment} & \textbf{DEM(ours)} &  \textbf{MOPO} & \textbf{COMBO} & \textbf{AWAC} & \textbf{MOREL} & \textbf{CQL} & \textbf{TD3+BC} & \textbf{(NEW)} \\
+    \midrule
+    medium & halfcheetah  & $\mathbf{70.5 \pm 4.2}$ & 42.3 & 54.2 & 41.1 & 42.1 & 44.4 & 42.8 & 78.1 \\
+           & hopper  & $65.5 \pm 10.9$ & 28.0 & 97.2 & 91.0 & 95.4 & 86.6 & $\mathbf{99.5}$ & 56.5\\
+           & walker2d  & $\mathbf{86.6 \pm 0.5}$ & 17.8 & 81.9 & 79.1 & 77.8 & 74.5 & 79.7 & 87.2\\
+
+    medium-replay & halfcheetah  & $\mathbf{73.1 \pm 0.4}$ & 53.1 & 55.1 & - & 40.2 & 46.2 & 43.3 & 67.3\\
+            & hopper  & $\mathbf{96.1 \pm 5.9}$ & 67.5 & 89.5 & - & 93.6 & 48.6 & 31.4 & 95.8\\
+            & walker2d  & $\mathbf{82.6 \pm 0.3}$ & 39.0 & 56.0 & - & 49.8 & 32.6 & 25.2 & 85\\
+
+    medium-expert & halfcheetah  & $75.4 \pm 13.3$ & 63.3 & 90.0 & 41.0 & 53.3 & 62.4 & $\mathbf{97.9}$ & 63.2\\
+            & hopper  & $102.2 \pm 0.8$ & 23.7 & 111.1 & 111.9 & 108.7 & 111.0 & $\mathbf{112.2}$ & 88.1\\
+            & walker2d  & $\mathbf{111.4 \pm 0.4}$ & 44.6 & 103.3 & 78.3 & 95.6 & 98.7 & 101.1 & 112\\
+    \bottomrule
+  \end{tabular}
+  \caption{Results for the D4RL benchmark.}
+  \label{tab:Performance}
+\end{table*}
+
+\subsection{Experiment setting}
+\paragraph{Data collection.} We evaluate DEM on a large subset of datasets in the D4RL benchmark \cite{d4rl} based on the MuJoCo simulator \cite{mujoco}, including three environments (halfcheetah, hopper, and walker2d) and three dataset types (medium, medium-replay, medium-expert), yielding a total of 9 problem settings. Their specific composition is as follows and for all datasets we use the v2 version. \textbf{medium}: contains transitions from an early-stopped SAC policy. \textbf{medium-replay}: composed of the replay buffer generated during training of the medium policy. \textbf{medium-expert}: includes a mixture of suboptimal and expert data.
+
+\paragraph{Experimental implementation.} We primarily follow the SAC \cite{sac} and MOPO \cite{mopo} settings for basic hyperparameters, while the other adjusted hyperparameters mainly include the length of the rollouts $h$ generated by the model and the penalty coefficient $\lambda$. We ran DEM on 3 random seeds for each task. In each run, we conducted 50k steps of online interaction, with the weight adjustment rate $\nu$ set to 0.001 and the weight adjustment position set to 5000. Considering fairness and consistency, we conducted 1M steps of policy training according to convention. We evaluated the policy every 1k steps. For more details about the hyperparameters settings, please refer to Appendix \ref{a}.
+
+\paragraph{Baselines.} We compared DEM with the offline-to-online RL algorithm AWAC \cite{awac}, several model-based baseline algorithms including MOPO \cite{mopo}, COMBO \cite{combo}, and MOREL \cite{morel}, as well as the classic offline RL algorithms CQL \cite{cql} and TD3+BC \cite{minimalist}. Since DEM is built upon MOPO with an added online fine-tuning process, comparing it to MOPO can be seen as an ablation study. All the results were taken from the original papers. The comparison results are presented in Table \ref{tab:Performance}. We report the performance during the last 10 iterations of training averaged over 3 seeds. $\pm$ captures the standard deviation over seeds. Each number for the D4RL benchmark using the normalization procedure proposed by \cite{d4rl}. The scores are undiscounted average returns normalized to roughly lie between 0 and 100, where a score of 0 corresponds to a random policy, and 100 corresponds to an expert. We bold the highest mean.
+
+\subsection{Evaluation Results on the D4RL Dataset}
+
+As shown in Table \ref{tab:Performance},
+DEM performs well across all tasks, consistently achieving scores on the \textit{medium-replay} dataset that surpassed those of classic RL algorithms. Even in environments where its performance is less outstanding, it maintains a stable level of results. However, its performance in \textit{medium-expert} environments is less satisfactory. This discrepancy could be due to the nature of the offline data. In the \textit{medium-expert} environment, the data is heavily concentrated in high-reward regions, leading to high expected rewards but low uncertainty. This limits the diversity and quality of the data collected during online interaction, thereby constraining DEM's potential. Fortunately, behavior cloning-based reinforcement learning methods, such as TD3+BC shown in the table, demonstrate excellent performance in high-quality datasets. Incorporating behavior cloning techniques may help address the limitations of DEM in such environments. For example, introducing a behavior cloning loss term during policy updates could enhance DEM's ability to utilize high-reward offline trajectories while preserving its exploration advantages.
+
+Notably, DEM outperforms the MOPO algorithm across all 9 problem settings, highlighting the effectiveness of our online framework. Such results are particularly remarkable given the modest online interaction cost of just 50k steps, significantly lower than the budgets required by traditional offline-to-online RL algorithms, which often exceed 200k steps. This efficiency makes DEM a practical and cost-effective solution for real-world applications.
+
+\begin{figure*}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{images/tsne.pdf}
+  \caption{Comparison between model-predicted states and offline data. We visualized the model-predicted states and offline state data density across three different offline datasets. The scatter points represent the model's data distribution, and the predicted Q-values were normalized and assigned as the color of the scatter points.}
+  \label{fig3}
+\end{figure*}
+
+\subsection{Model Validation with T-SNE}
+To examine whether the model, supplemented with online data through the uncertainty exploration process, truly focuses on regions with high expected return and high uncertainty, we conducted the following visualization experiment. Specifically, we visualized three different types of datasets: \textit{hopper-medium}, \textit{hopper-medium-replay}, and \textit{hopper-medium-expert}. First, we sampled 2000 transitions $(s, a, s', r)$ from the offline dataset. Next, we input the offline state $s$ into the model to obtain the model-predicted transitions $(s, a_T, s'_T, r_T)$. Then, we used t-SNE \cite{tsne} to project $\{s'\}$ and $\{s'_T\}$ onto a two-dimensional plane. Finally, we plotted the scatter points of $\{s'_T\}$, using the Q-value network of the offline policy to estimate the expected return of the predicted action-value pair $(s, a_T)$, and the Q-values were represented as the color of the points. Additionally, we displayed the kernel density estimate of the offline state $\{s'\}$ as a reference. The result is shown in Figure \ref{fig3}.
+
+As shown in the figure, the model predominantly distributes its predictions in low-density edge regions, with the scatter points mostly showing red, indicating high uncertainty and high expected return. This suggests that under the guidance of policy data, the model indeed focuses more on regions with both high uncertainty and high action value. Comparing the three subplots within the figure, the scatter points in the \textit{hopper-medium-replay} environment are more dispersed, while those in the \textit{hopper-medium-expert} environment are more concentrated. This indicates that in the \textit{hopper-medium-replay} environment, online interactions enabled sufficient exploration, supplementing more out-of-distribution data. In contrast, in the \textit{hopper-medium-expert} environment, the high quality and low variance of the expert data made it challenging for online interactions to collect higher action-value data through exploration. As a result, the quality of the supplemented data may not match that of the expert data in the offline dataset, leaving the model insufficiently updated. This further demonstrates that DEM is better suited for environments with evenly distributed data but less applicable to high-quality datasets.
+
+\subsection{Ablation Experiment of Dynamic Weight Adaptation}
+To validate the advantages of the dynamic weight adaptation algorithm, we conducted an ablation experiment comparing the full DEM with a version where the dynamic weight adaptation is removed (DEM-s).
+
+The hyperparameters for each ablation task were consistent with those used in the D4RL benchmark evaluation experiments, with the only difference being that in DEM-s, the uncertainty weight parameter $c$ is fixed as the balance factor $c'$, meaning that the uncertainty weight no longer decreases as the number of online interaction steps increases but remains constant.
+
+\begin{table}
+  \centering
+  \begin{tabular}{llrr}
+    \toprule
+    \textbf{Dataset type} & \textbf{Environment} & \textbf{DEM} & \textbf{DEM-s} \\
+    \midrule
+    medium        & halfcheetah & $\mathbf{70.5}$ & $64.7$ \\
+                  & hopper & $\mathbf{65.5}$ & $53.0$ \\
+                  & walker2d & $\mathbf{86.6}$ & $86.2$  \\
+    medium-replay & halfcheetah & $\mathbf{73.1}$ & $72.6$ \\
+                  & hopper & $\mathbf{96.1}$ & $90.2$ \\
+                  & walker2d & $\mathbf{82.6}$ & $82.1$ \\
+    medium-expert & halfcheetah & $\mathbf{75.4}$ & $36.1$ \\
+                  & hopper & $102.2$ & $102.2$ \\
+                  & walker2d & $111.4$ & $\mathbf{112.0}$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{Results of ablation experiment.}
+  \label{tab:ablation}
+\end{table}
+
+As shown in Table \ref{tab:ablation}, the full DEM achieved superior performance on nearly all tasks. Notable improvements were observed in the \textit{hopper-medium} and \textit{halfcheetah-medium-replay} tasks, where DEM achieved scores of 65.5 and 75.4, compared to 53.0 and 36.1 for DEM-s, respectively. However, in the walker2d-medium-expert task, DEM slightly underperformed DEM-s. We hypothesize that this task's highly structured expert data may have led to marginal disruptions in DEM's early exploration phase.
+
+Clearly, the dynamic weight adaptation plays a crucial role in balancing exploration and exploitation during online interaction. Early in the interaction process, a higher uncertainty weight encourages exploration, leading to better environmental coverage. As interactions accumulate, the weight decreases, enabling the model to focus on high-reward regions and stabilize its performance. This adaptive mechanism allows DEM to outperform DEM-s, which relies on a fixed uncertainty weight that cannot adjust to the dynamic demands of the online interaction process.
+
+\section{Conclusion}
+In this work, we propose a model-based offline-to-online reinforcement learning algorithm that uses uncertainty estimates to maintain conservatism during the offline phase and increase exploration during the online phase, effectively smoothing the mitigation of distributional shift. By combining the model with both offline and online data, our approach fully leverages the information from both phases. Our method has been experimentally validated, demonstrating its effectiveness and offering a novel approach for model utilization in offline-to-online RL. It also provides a new option for uncertainty in exploring out-of-distribution data. Furthermore, we hope that this optimization technique for models can be applied to other model-based research fields, such as image processing, among others.
+
+\appendices
+\section{Experiment Details}
+\label{a}
+\subsection{Model Training}
+In the offline phase, we followed the previous model training methodology \cite{mopo,combo}, using maximum likelihood to train an ensemble of 7 dynamic models. The best 5 models were selected based on the validation error from 1000 transitions in the training dataset. Each model in the ensemble is a 4-layer feedforward neural network with 200 hidden units per layer. After the final hidden layer, the model uses a two-head architecture to output the mean and variance. In the online phase, the collected data is added to the training dataset, and the model is retrained. For all environments, we performed 50k steps of online interaction and updated the model 5 times.
+
+\subsection{Policy Training}
+In both the offline and online phases, we used the SAC algorithm for policy updates, following the default parameters of SAC. During the offline phase, we sampled a batch of 256 transitions for policy updates, with 5 \% of the data coming from the offline dataset and the rest generated by the model. In the online phase, each update used short trajectory data of 5 rollouts from interactions with the real environment to update the policy 10k times, with a total of 50k interaction steps. After obtaining the new model, the policy is updated in the same manner.
+
+The only parameters we adjusted between datasets are the length of the rollouts $h$ generated by the model, the penalty coefficient $\lambda$ (mainly referring to MOPO), and the balance factor $c_0$ selected based on the average Q-value and U-value. For more details, please refer to the table \ref{tab:hyper}.
+
+\begin{table}[!ht]
+  \centering
+  \begin{tabular}{llrrrr}
+    \toprule
+    \textbf{Dataset type} & \textbf{Environment} & $h$ & $\lambda$ & $c_0$\\
+    \midrule
+    medium & halfcheetah  & 5 & 0.5 & 300\\
+           & hopper  & 5 & 5.0 & 300\\
+           & walker2d  & 5 & 0.5 & 100\\
+
+    medium-replay & halfcheetah  & 5 & 0.5 & 200\\
+            & hopper & 5 & 2.5 & 300\\
+            & walker2d & 1 & 2.5 & 20\\
+
+    medium-expert & halfcheetah  & 5 & 2.5 & 300\\
+            & hopper  & 5 & 5.0 & 300\\
+            & walker2d  & 1 & 2.5 & 200\\
+    \bottomrule
+  \end{tabular}
+  \caption{Hyperparameters used in the D4RL datasets.}
+  \label{tab:hyper}
+\end{table}
+
+\section{Proofs}
+\label{b}
+\subsection{Proof of Lemma 1}
+
+The proof of Lemma 1 is mainly based on the following telescoping lemma \cite{mopo}:
+
+\begin{lemma}
+Let $M$ and $\hat{M}$ be two MDPs with the same reward function $r$, but different dynamics $T$ and $\hat{T}$ respectively. Let $G^{\pi}_{\hat{M}} (s, a) := \mathbb{E}_{s'\sim\hat{T}(s,a)}  [V^{\pi}_M (s')] - \mathbb{E}_{s'\sim T (s,a)} [V^{\pi}_M (s')]$. Then,
+\begin{equation}\eta_{\hat{M}}(\pi) - \eta_M (\pi) = \gamma  \bar{\mathbb{E}}_{(s,a)\sim \rho^{\pi}_{\hat{T}}} [ G^{\pi}_{\hat{M}} (s, a) ].
+\label{eq:telescope1}
+\end{equation}
+As an immediate corollary, we have
+\begin{equation}
+\eta_M (\pi)  \geq \bar{\mathbb{E}}_{(s,a)\sim \rho^{\pi}_{\hat{T}}} [ r(s,a)- |G^{\pi}_{\hat{M}} (s, a) |].
+\label{eq:telescope2}
+\end{equation}
+\end{lemma}
+
+Let $\pi_{off}$, $\hat{T}_{off}$ and $\hat{M}_{off}$ be the pretrained policy, transition model and MDP with offline dataset. Let $\pi_{on}$, $\hat{T}_{on}$ and $\hat{M}_{off}$ be the updated policy, transition model and MDP after fine-tuning. Our aim is to show that the lower bound improves in the updated policy and transition:
+
+\begin{equation}
+\begin{aligned}
+  \label{eq:aim}
+  &\bar{\mathbb{E}}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}} [ r(s,a)- |G^{\pi_{on}}_{\hat{M}_{on}} (s, a) |] \\ &\geq \bar{\mathbb{E}}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}} [ r(s,a)- |G^{\pi_{off}}_{\hat{M}_{off}} (s, a) |].
+\end{aligned}
+\end{equation}
+
+According to Corollary 1, the updated transition model can achieve a lower error rate than the pretrained model. Therefore, the difference between the value function of the policy $\pi$ under the transition function $\hat{T}_{on}$ and the value function under the true transition function $T$, is smaller than the difference between the value function of the policy under the transition function $\hat{T}_{off}$ and the value function under the transition function $T$.
+
+\begin{equation}
+  \begin{aligned}
+    &|\mathbb{E}_{s'\sim\hat{T}_{off}(s,a)}  [V^{\pi}_{M} (s')] - \mathbb{E}_{s'\sim T (s,a)} [V^{\pi}_{M} (s')]| \\
+    &\geq |\mathbb{E}_{s'\sim\hat{T}_{on}(s,a)}  [V^{\pi}_{M} (s')] - \mathbb{E}_{s'\sim T (s,a)} [V^{\pi}_{M} (s')]|,
+  \end{aligned}
+  \end{equation}
+which concludes that $|G^{\pi}_{\hat{M}_{off}} (s, a) |\geq |G^{\pi}_{\hat{M}_{on}} (s, a) |$.
+
+On the other hand, as the fine-tuned policy $\pi_{on}$ is trained with the updated transition model $\hat{T}_{on}$, the residual item $|G^{\pi_{on}}_{\hat{M}_{on}} (s, a) |$ will be smaller than that of the offline policy. Therefore, for each pair $(s,a)$, there is $|G^{\pi_{on}}_{\hat{M}_{on}} (s, a) |\leq |G^{\pi_{off}}_{\hat{M}_{on}} (s, a) | \leq |G^{\pi_{off}}_{\hat{M}_{off}} (s, a) |$.
+
+As our policy collects samples with higher reward, it is trival that $\bar{\mathbb{E}}_{(s,a)\sim \rho^{\pi_{on}}_{\hat{T}_{on}}} [ r(s,a)] \geq \bar{\mathbb{E}}_{(s,a)\sim \rho^{\pi_{off}}_{\hat{T}_{off}}} [ r(s,a)]$. Summarizing the above inequalities, we can have the inequality of Equation \ref{eq:aim}.
+
+\bibliographystyle{IEEEtran}
+\bibliography{full_ref}
+
+\end{document}
